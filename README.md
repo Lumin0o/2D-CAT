@@ -37,6 +37,8 @@ Puis ouvrir http://localhost:8080. La molette zoome, la souris remplace le doigt
 
 ## Tester sur iPhone (installation hors ligne)
 
+L'app est publiée sur GitHub Pages : https://lumin0o.github.io/2D-CAT/ (dépôt Lumin0o/2D-CAT, branche main). Chaque `git push` met le site à jour ; l'app installée se met à jour à sa réouverture.
+
 Le service worker exige HTTPS. Déposer le dossier tel quel sur un hébergeur statique
 (GitHub Pages, Netlify, Vercel, Cloudflare Pages), ouvrir l'adresse dans Safari,
 puis Partager → « Sur l'écran d'accueil ». Lancer l'app une fois avec du réseau :
