@@ -26,6 +26,7 @@ export class LineTool extends Tool {
     if (end.align === 'h') sk.addConstraint('horizontal', [line.id]);
     if (end.align === 'v') sk.addConstraint('vertical', [line.id]);
     this.tc.commit('Ligne');
+    if (this.dragged) { this.pts = []; this.chain = 0; return; }   // glisser-lâcher : un seul segment
     this.chain++;
     this.pts = [{ x: p2.x, y: p2.y, pointId: p2.id, kind: 'point' }];
   }

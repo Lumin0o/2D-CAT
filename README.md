@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.3.
+Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.4.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -25,6 +25,15 @@
 - « Aimantation et grille » et « Fichiers » : retoucher le bouton ferme la fenêtre (elle se rouvrait aussitôt).
 - Grille façon papier millimétré : lignes fines, plus marquées tous les 5 et 10 pas ; l'aimantation suit les lignes bien visibles.
 - Démarrage : écran « Chargement de l'app… » avec le nombre de fichiers reçus quand le serveur est lent (au lieu d'un faux écran d'erreur au bout de 9 s) ; erreur seulement si plus rien n'arrive pendant 25 s. Une fois l'app lancée, message « Préparation du mode hors ligne… » puis « Prête » ; le service worker réessaie chaque fichier.
+
+## Retours iPhone intégrés (0.2.4)
+
+- Cotation ordinale (groupe Cotation) : on touche la référence (sommet, ligne, arc ou cercle → centre), un tap dans le vide place la cote 0 (au-dessus / en dessous : cotes en X ; à gauche / à droite : cotes en Y), puis chaque élément touché reçoit sa cote depuis la référence, alignée sur la cote 0. Glisser une de ces cotes déplace toute la ligne ; supprimer la cote 0 supprime ses cotes.
+- Barre d'outils développée : sa taille suit son contenu (elle s'arrête au dernier groupe, en portrait comme en paysage).
+- Réglages : 5 à 8 cases par ligne dans la barre réduite (10 à 16 en 2 lignes).
+- Rangée du bas : icônes seules ; nouveau bouton Grille (marche / arrêt) à droite de l'Aimantation. La fenêtre Aimantation garde « Aimant » et « Aimanter à la grille ».
+- Grille : gris sombre en thème sombre, gris clair en thème clair.
+- Réglages › Tracé › Poser les points : Touchers (un toucher par point), Glisser (glisser-lâcher du premier au deuxième point ; le troisième éventuel au toucher) ou Les deux. En glisser-lâcher, la ligne trace un seul segment.
 
 ## Tester sur ordinateur
 

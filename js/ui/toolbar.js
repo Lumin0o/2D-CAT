@@ -17,6 +17,7 @@ export class Toolbar {
     this.render();
   }
 
+  cellsPerRow() { const n = Math.round(this.app.settings.get('toolbarCells')); return n >= 5 && n <= 8 ? n : 6; }
   isLandscape() { return window.matchMedia('(orientation: landscape)').matches; }
   variantSide() { return this.isLandscape() ? 'right' : 'below'; }
 
@@ -30,7 +31,9 @@ export class Toolbar {
     const rows = s.get('toolbarRows') === 2 ? 2 : 1;
     this.els.bar.style.setProperty('--tb-rows', rows);
     this.els.bar.classList.toggle('rows-2', rows === 2);
-    const favs = s.get('favorites').slice(0, rows * 6);
+    const cols = this.cellsPerRow();
+    this.els.bar.style.setProperty('--tb-cols', cols);
+    const favs = s.get('favorites').slice(0, rows * cols);
     this.els.cells.innerHTML = '';
     favs.forEach((item) => {
       const d = describeFavorite(item);
@@ -105,6 +108,15 @@ export class Toolbar {
   setExpanded(on) {
     this.expanded = on;
     this.els.expanded.hidden = !on;
+    if (on) this.fitExpanded();
     this.app.popovers.close();
+  }
+  /** Barre développée à la taille de son contenu : en paysage, juste assez de colonnes pour tous les groupes. */
+  fitExpanded() {
+    const el = this.els.expanded;
+    if (!this.isLandscape()) { el.style.removeProperty('--xg-cols'); return; }
+    const avail = window.innerHeight - 16 - 36;            // marges et flèche
+    const perCol = Math.max(1, Math.floor((avail + 6) / (72 + 6)));
+    el.style.setProperty('--xg-cols', Math.ceil(GROUPS.length / perCol));
   }
 }

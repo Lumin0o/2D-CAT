@@ -4,7 +4,9 @@ import { db } from './db.js';
 export const DEFAULT_FAVORITES = [
   'line', 'rect', 'circle', 'arc', 'construction', 'dimension',
   'measure', 'trim', 'offset', 'mirror', 'fillet', 'move',
+  'tool:rectCenter', 'tool:circle3', 'tool:arc3', 'tool:dimOrdinate',
 ];
+export const MAX_CELLS = 8;         // cases par ligne : 5 à 8
 
 export const DEFAULT_SETTINGS = {
   theme: 'auto',              // 'light' | 'dark' | 'auto'
@@ -13,6 +15,8 @@ export const DEFAULT_SETTINGS = {
   angleUnit: 'deg',           // 'deg' | 'rad'
   longPressMs: 500,
   toolbarRows: 1,             // 1 | 2
+  toolbarCells: 6,            // cases par ligne (5 à 8)
+  drawInput: 'tap',           // tracé : 'tap' (touchers successifs) | 'drag' (glisser-lâcher) | 'both'
   favorites: [...DEFAULT_FAVORITES],   // id de groupe, ou 'tool:<id>'
   colors: {
     light: { under: '#1f6fe5', full: '#111111', over: '#e0241c' },
@@ -45,9 +49,9 @@ export class Settings {
   async load() {
     const saved = await db.get('settings');
     if (saved) this.data = deepMerge(DEFAULT_SETTINGS, saved);
-    // Garantit 12 favoris
-    const fav = this.data.favorites.slice(0, 12);
-    while (fav.length < 12) fav.push(DEFAULT_FAVORITES[fav.length]);
+    // Garantit 2 × 8 favoris
+    const fav = this.data.favorites.slice(0, 2 * MAX_CELLS);
+    while (fav.length < 2 * MAX_CELLS) fav.push(DEFAULT_FAVORITES[fav.length]);
     this.data.favorites = fav;
     return this.data;
   }

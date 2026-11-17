@@ -3,7 +3,7 @@ import { LineTool, LineMidTool } from './line.js';
 import { Rect2Tool, RectCenterTool, Rect3CornerTool, Rect3CenterTool, ParallelogramTool } from './rect.js';
 import { CircleCenterTool, Circle3Tool } from './circle.js';
 import { ArcCenterTool, Arc3Tool, ArcTangentTool } from './arc.js';
-import { DimensionTool, DimHorizontalTool, DimVerticalTool, DimChainTool } from './dimension.js';
+import { DimensionTool, DimHorizontalTool, DimVerticalTool, DimChainTool, DimOrdinateTool } from './dimension.js';
 
 export const GROUPS = [
   { id: 'line', label: 'Ligne', tools: [
@@ -35,6 +35,7 @@ export const GROUPS = [
     { id: 'dimHorizontal', label: 'Cote horizontale', icon: 'dimH' },
     { id: 'dimVertical', label: 'Cote verticale', icon: 'dimV' },
     { id: 'dimChain', label: 'Cotation en chaîne', sub: 'Cotes alignées, de point en point', icon: 'dimChain' },
+    { id: 'dimOrdinate', label: 'Cotation ordinale', sub: 'Toutes les cotes depuis une même référence (0)', icon: 'dimOrd' },
   ] },
   { id: 'measure', label: 'Mètre', tools: [
     { id: 'measure', label: 'Mètre', sub: 'Mesure sans créer de cote', icon: 'measure', stage: 3 },
@@ -77,6 +78,7 @@ export const TOOL_CLASSES = {
   dimHorizontal: DimHorizontalTool,
   dimVertical: DimVerticalTool,
   dimChain: DimChainTool,
+  dimOrdinate: DimOrdinateTool,
 };
 
 const toolIndex = new Map();

@@ -49,6 +49,9 @@ export class InfoBar {
       } else if (p) {
         main = p.id === ORIGIN_ID ? 'Origine' : 'Point';
         extra = `X ${fmtLength(p.x, S)} · Y ${fmtLength(p.y, S)}`;
+      } else if (k && k.type === 'ordZero') {
+        main = 'Cote ordinale 0';
+        extra = 'Référence des cotes ordinales · la supprimer supprime aussi ses cotes';
       } else if (k && isDimension(k)) {
         const v = k.driven ? dimMeasure(sketch, k) : k.value;
         main = `Cote ${k.type === 'dimAngle' ? fmtAngle(v, S) : fmtLength(v, S)}`;

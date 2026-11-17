@@ -1,6 +1,6 @@
 // Contrôleur principal : relie modèle, solveur, rendu et interface.
 import { Sketch, ORIGIN_ID } from './core/model.js';
-import { solve, analyze, isDimension } from './core/solver.js';
+import { solve, analyze, isDimension, isAnnotation } from './core/solver.js';
 import { History } from './core/history.js';
 import { hitTest, entityDistance, entityInsideRect, entityTouchesRect, outwardTangentAt, endpointEntities, keyPoints, closestOnEntity, entityIntersections, entityLength } from './core/query.js';
 import { dist, sub, add, mul, norm, perp, dot } from './core/geom.js';
@@ -36,7 +36,7 @@ export class App {
     this.els = {
       app: $('app'), canvasWrap: $('canvas-wrap'), canvas: $('canvas'), hint: $('hint'),
       undo: $('btn-undo'), redo: $('btn-redo'), fit: $('btn-fit'), multi: $('btn-multi'),
-      snap: $('btn-snap'), files: $('btn-files'), settings: $('btn-settings'),
+      snap: $('btn-snap'), grid: $('btn-grid'), files: $('btn-files'), settings: $('btn-settings'),
       popoverLayer: $('popover-layer'), settingsPanel: $('settings-panel'),
     };
     this.settings = new Settings();
@@ -97,6 +97,7 @@ export class App {
     this.els.fit.innerHTML = icon('fit');
     this.els.multi.innerHTML = icon('multi');
     this.els.snap.querySelector('.bb-icon').innerHTML = icon('magnet');
+    this.els.grid.querySelector('.bb-icon').innerHTML = icon('grid');
     this.els.files.querySelector('.bb-icon').innerHTML = icon('folder');
     this.els.settings.querySelector('.bb-icon').innerHTML = icon('gear');
     const click = (el, fn) => el.addEventListener('click', (e) => { e.preventDefault(); fn(); });
@@ -105,6 +106,8 @@ export class App {
     click(this.els.fit, () => this.fitAll());
     click(this.els.multi, () => this.setMulti(!this.multi));
     click(this.els.snap, () => openSnapPopover(this, this.els.snap));
+    click(this.els.grid, () => { const on = !this.settings.get('grid'); this.settings.set('grid', on); showToast(on ? 'Grille affichée' : 'Grille masquée'); });
+    this.updateGridButton();
     click(this.els.files, () => openFilesPopover(this, this.els.files));
     click(this.els.settings, () => this.settingsPanel.open());
 
@@ -124,13 +127,15 @@ export class App {
     if ('ResizeObserver' in window) new ResizeObserver(() => this.onResize()).observe(this.els.canvasWrap);
     window.addEventListener('resize', () => this.onResize());
     window.addEventListener('orientationchange', () => setTimeout(() => this.onResize(), 50));
-    window.matchMedia('(orientation: landscape)').addEventListener('change', () => { this.popovers.close(); setTimeout(() => this.onResize(), 50); });
+    window.matchMedia('(orientation: landscape)').addEventListener('change', () => { this.popovers.close(); setTimeout(() => { this.onResize(); if (this.toolbar.expanded) this.toolbar.fitExpanded(); }, 50); });
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(this.settings); this._colors = null; this.requestDraw(); this.infobar.update(); });
 
     // Réglages → interface
     this.settings.onChange((key) => {
       if (key === 'theme' || key === 'colors' || key === '*') { applyTheme(this.settings); this._colors = null; }
-      if (['toolbarRows', 'favorites', 'lastTools', '*'].includes(key)) this.toolbar.render();
+      if (['toolbarRows', 'toolbarCells', 'favorites', 'lastTools', '*'].includes(key)) this.toolbar.render();
+      if (key === 'grid' || key === '*') this.updateGridButton();
+      if ((key === 'drawInput' || key === '*') && this.tool) this.tool.updateHint();
       this.infobar.update();
       this.requestDraw();
     });
@@ -174,7 +179,7 @@ export class App {
       toast: (m) => showToast(m),
       deactivate: () => self.setTool(null),
       hitGeometry: (wp) => hitTest(self.sketch, wp, self.vp.pxToWorld(HIT_PX)),
-      createDimension: (k) => self.createDimension(k),
+      createDimension: (k, label) => self.createDimension(k, label),
       takeSelection: () => { const ids = self._pendingSel; self._pendingSel = []; return ids; },
       endpointTangent: (pid) => {
         const es = endpointEntities(self.sketch, pid);
@@ -440,6 +445,11 @@ export class App {
     this.setTool(toolId);
     if (this.toolbar.expanded) this.toolbar.setExpanded(false);
   }
+  updateGridButton() {
+    const on = !!this.settings.get('grid');
+    this.els.grid.classList.toggle('on', on);
+    this.els.grid.setAttribute('aria-pressed', String(on));
+  }
   setHint(text) {
     this.els.hint.textContent = text || '';
     this.els.hint.hidden = !text;
@@ -455,12 +465,13 @@ export class App {
   hitAt(s, wp) {
     const sk = this.sketch;
     for (const k of sk.constraints.values()) {
-      if (!isDimension(k)) continue;
+      if (!isAnnotation(k)) continue;
       const lay = dimLayout(sk, k);
       if (!lay) continue;
       const t = this.vp.toScreen(lay.text);
       const size = this.renderer.dimTextSize(dimLabel(sk, k, this.settings.data));
-      if (Math.abs(s.x - t.x) <= size.w / 2 + 5 && Math.abs(s.y - t.y) <= size.h / 2 + 5) return { type: 'dim', id: k.id };
+      const [hw, hh] = lay.rot ? [size.h / 2, size.w / 2] : [size.w / 2, size.h / 2];
+      if (Math.abs(s.x - t.x) <= hw + 5 && Math.abs(s.y - t.y) <= hh + 5) return { type: 'dim', id: k.id };
     }
     let bb = null;
     for (const b of layoutBadges(sk, this.vp)) {
@@ -562,7 +573,12 @@ export class App {
   }
   applyDrag(d, wp) {
     const sk = this.sketch;
-    if (d.mode === 'dim') { const k = sk.constraints.get(d.hit.id); if (k) k.pos = { x: wp.x, y: wp.y }; return; }
+    if (d.mode === 'dim') {
+      let k = sk.constraints.get(d.hit.id);
+      if (k && k.ord) k = sk.constraints.get(k.ord);     // cote ordinale : on déplace toute la ligne de cotes
+      if (k) k.pos = { x: wp.x, y: wp.y };
+      return;
+    }
     const weights = new Map();
     const grid = this.gridSnapOn() ? this.gridStep() : 0;
     const snapG = (v) => (grid ? { x: Math.round(v.x / grid) * grid, y: Math.round(v.y / grid) * grid } : v);
@@ -657,17 +673,18 @@ export class App {
   }
 
   // ---------- Cotes et valeurs ----------
-  createDimension(k) {
+  createDimension(k, label = 'Cote') {
     const sk = this.sketch;
     const { type, refs, ...extra } = k;
     const c = sk.addConstraint(type, refs, extra);
-    if (analyze(sk).constraints.get(c.id) === 'over') {
+    if (isDimension(c) && analyze(sk).constraints.get(c.id) === 'over') {
       c.driven = true;
       showToast('Cote pilotée : sinon l\'esquisse serait sur-contrainte', { ms: 2600 });
     }
-    this.commit('Cote');
+    this.commit(label);
     // saisie directe de la valeur (Annuler garde la valeur mesurée)
-    if (!c.driven && this.sketch.constraints.has(c.id)) this.editDimension(c.id);
+    if (isDimension(c) && !c.driven && this.sketch.constraints.has(c.id)) this.editDimension(c.id);
+    return this.sketch.constraints.has(c.id) ? c.id : null;
   }
   /** Bascule une cote entre pilotée (mesure) et pilotante (impose sa valeur). */
   toggleDriven(cid) {
@@ -722,9 +739,9 @@ export class App {
   }
   editDimension(cid) {
     const k = this.sketch.constraints.get(cid);
-    if (!k) return;
+    if (!k || !isDimension(k)) return;
     if (k.driven) { showToast('Cote pilotée : touchez « Rendre pilotante » pour la modifier', { ms: 2600 }); return; }
-    const title = { dimRadius: 'Rayon', dimHorizontal: 'Cote horizontale', dimVertical: 'Cote verticale' }[k.type] || 'Cote';
+    const title = k.ord ? 'Cote ordinale' : { dimRadius: 'Rayon', dimHorizontal: 'Cote horizontale', dimVertical: 'Cote verticale' }[k.type] || 'Cote';
     if (k.type === 'dimAngle') this.angleKeypad('Angle', k.value, (v) => this.setDimValue(cid, v));
     else this.lengthKeypad(title, k.value, (v, flip) => this.setDimValue(cid, v, flip), { flippable: k.type !== 'dimRadius' });
   }

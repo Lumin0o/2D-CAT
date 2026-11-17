@@ -2,7 +2,7 @@
 // puis tracés en px écran, pour des épaisseurs de trait constantes.
 import { TAU, arcInfo, niceStep } from '../core/geom.js';
 import { ORIGIN_ID } from '../core/model.js';
-import { isDimension } from '../core/solver.js';
+import { isAnnotation } from '../core/solver.js';
 import { dimLayout, dimLabel, layoutBadges, REL_GLYPH } from './annotations.js';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
@@ -114,7 +114,7 @@ export class Renderer {
 
     // Cotes
     for (const k of sk.constraints.values()) {
-      if (!isDimension(k)) continue;
+      if (!isAnnotation(k)) continue;
       const color = sel.has(k.id) ? C.selected : (an.constraints.get(k.id) === 'over' || (err && err.has(k.id))) ? C.over : k.driven ? C.dimDriven : C.dim;
       this.drawDimension(sk, k, color, st);
     }
@@ -209,14 +209,16 @@ export class Renderer {
     const t = vp.toScreen(lay.text);
     ctx.font = `13px ${FONT}`;
     const w = ctx.measureText(label).width + 8;
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    if (lay.rot) ctx.rotate(-Math.PI / 2);      // cote ordinale horizontale : texte vertical
     ctx.fillStyle = st.colors.canvasBg;
-    ctx.fillRect(t.x - w / 2, t.y - 9, w, 18);
+    ctx.fillRect(-w / 2, -9, w, 18);
     ctx.fillStyle = color;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, t.x, t.y + 0.5);
-    ctx.textAlign = 'start';
-    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(label, 0, 0.5);
+    ctx.restore();
   }
 
   drawPoint(s, color, r, bg) {

@@ -5,6 +5,9 @@
 //   sont « coïncidentes » (c'est ainsi que sont reliés les coins d'un rectangle).
 // - contraintes : { id, type, refs: [...ids], value? }
 //   Les cotes sont des contraintes avec une valeur et une position d'affichage.
+//   Cotes ordinales : une cote 0 { type: 'ordZero', refs: [point de référence], axis: 'h'|'v', pos }
+//   (sans équation) et des cotes horizontales / verticales { refs: [référence, point], ord: id de la cote 0 },
+//   alignées sur la cote 0.
 import { dist, arcBBox } from './geom.js';
 
 export const ORIGIN_ID = 'origin';
@@ -126,6 +129,7 @@ export class Sketch {
     for (const [cid, k] of this.constraints) {
       if (new Set(k.refs).size < k.refs.length) { this.constraints.delete(cid); continue; }
       if (!k.refs.every((r) => this.points.has(r) || this.entities.has(r))) { this.constraints.delete(cid); continue; }
+      if (k.ord && !this.constraints.has(k.ord)) { this.constraints.delete(cid); continue; }   // cote 0 supprimée
       if (k.type === 'coincident' || k.type === 'midpoint' || k.type === 'dimPointLine') {
         const e = this.entities.get(k.refs[1]);
         if (e && this.entityPointIds(e).includes(k.refs[0]) && !(e.type !== 'line' && e.c === k.refs[0])) this.constraints.delete(cid);

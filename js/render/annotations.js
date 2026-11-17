@@ -2,7 +2,7 @@
 // Utilisé par le rendu et par le test de toucher.
 import { sub, add, mul, dot, cross, norm, perp, dist, angleOf, fromAngle, arcInfo, lineLineIntersection, mid } from '../core/geom.js';
 import { fmtLengthShort, fmtAngle } from '../core/units.js';
-import { isDimension } from '../core/solver.js';
+import { isAnnotation } from '../core/solver.js';
 
 const P = (sk, id) => sk.points.get(id);
 const curveOf = (sk, e) => { const c = P(sk, e.c); return { c, r: e.type === 'circle' ? e.r : dist(c, P(sk, e.s)) }; };
@@ -65,6 +65,7 @@ export function dimMeasure(sk, k) {
 }
 
 export function dimLabel(sk, k, settings) {
+  if (k.type === 'ordZero') return '0';
   const v = k.driven ? dimMeasure(sk, k) : k.value;
   let t;
   if (k.type === 'dimAngle') t = fmtAngle(v, settings);
@@ -78,6 +79,7 @@ export function dimLabel(sk, k, settings) {
  * @returns {{segs:Array, ext:Array, arrows:Array<{p,dir}>, arc:object|null, text:{x,y}}|null}
  */
 export function dimLayout(sk, k) {
+  if (k.ord || k.type === 'ordZero') return ordinateLayout(sk, k);
   const pos = k.pos || { x: 0, y: 0 };
   const A = sk.entities.get(k.refs[0]), B = sk.entities.get(k.refs[1]);
   const out = { segs: [], ext: [], arrows: [], arc: null, text: pos };
@@ -171,6 +173,20 @@ export function dimLayout(sk, k) {
   }
 }
 
+/**
+ * Cote ordinale : une ligne d'attache du point jusqu'à la ligne de la cote 0, et la valeur au bout.
+ * axis 'h' : mesure en X, valeurs alignées horizontalement (texte vertical, comme SOLIDWORKS) ;
+ * axis 'v' : mesure en Y, valeurs alignées verticalement.
+ */
+function ordinateLayout(sk, k) {
+  const zero = k.type === 'ordZero' ? k : sk.constraints.get(k.ord);
+  if (!zero || !zero.pos) return null;
+  const T = P(sk, k.type === 'ordZero' ? k.refs[0] : k.refs[1]);
+  if (!T) return null;
+  const L = zero.axis === 'h' ? { x: T.x, y: zero.pos.y } : { x: zero.pos.x, y: T.y };
+  return { segs: [], ext: [[T, L]], arrows: [], arc: null, text: L, rot: zero.axis === 'h' };
+}
+
 // ---------- Icônes de relations ----------
 export const REL_GLYPH = {
   horizontal: 'H', vertical: 'V', parallel: '//', perpendicular: '⊥', tangent: 'T', concentric: '◎',
@@ -207,7 +223,7 @@ export function layoutBadges(sk, vp) {
     out.push({ cid, type, x: s.x + nx * 19 + ux * 20 * i, y: s.y + ny * 19 + uy * 20 * i });
   };
   for (const k of sk.constraints.values()) {
-    if (isDimension(k)) continue;
+    if (isAnnotation(k)) continue;
     if (k.type === 'coincident' || k.type === 'midpoint') { atPoint(k.id, k.type, k.refs[0]); continue; }
     if (k.type === 'symmetric') { atPoint(k.id, k.type, k.refs[0]); atPoint(k.id, k.type, k.refs[1]); continue; }
     for (const r of k.refs) {

@@ -6,6 +6,8 @@
 
 const DIM_TYPES = new Set(['dimLength', 'dimDistance', 'dimHorizontal', 'dimVertical', 'dimPointLine', 'dimLineLine', 'dimAngle', 'dimRadius']);
 export const isDimension = (k) => DIM_TYPES.has(k.type);
+/** Cotes affichées sur le dessin : les cotes, plus la cote 0 des cotes ordinales (sans équation). */
+export const isAnnotation = (k) => DIM_TYPES.has(k.type) || k.type === 'ordZero';
 
 const wrapPi = (a) => { a = (a + Math.PI) % (2 * Math.PI); if (a < 0) a += 2 * Math.PI; return a - Math.PI; };
 

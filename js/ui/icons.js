@@ -21,6 +21,7 @@ export const ICONS = {
   dimH: S(`<path d="M4 9V3M20 9V3M5 6h14"/><path d="m8 4.5-3 1.5 3 1.5M16 4.5l3 1.5-3 1.5"/>${dot(4, 20)}${dot(20, 13)}<path d="M4 20 20 13" stroke-width="1" stroke-dasharray="2 2"/>`),
   dimV: S(`<path d="M15 4h6M15 20h6M18 5v14"/><path d="m16.5 8 1.5-3 1.5 3M16.5 16l1.5 3 1.5-3"/>${dot(4, 4)}${dot(11, 20)}<path d="M4 4l7 16" stroke-width="1" stroke-dasharray="2 2"/>`),
   dimChain: S(`<path d="M3 9V4M12 9V4M21 9V4M4 6.5h7M13 6.5h7"/>${dot(3, 18)}${dot(12, 14)}${dot(21, 19)}<path d="M3 18l9-4 9 5" stroke-width="1" stroke-dasharray="2 2"/>`),
+  dimOrd: S(`<path d="M3 20h18M3 20V4M8 20V9M14 20v-7M20 20V6" stroke-width="1"/>${dot(3, 4)}${dot(8, 9)}${dot(14, 13)}${dot(20, 6)}<path d="M2 23h3M6 23h4M12 23h4M18 23h4" stroke-width="2.2"/>`),
   measure: S(`<rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 9v3M11 9v4M15 9v3M19 9v4"/><circle cx="5.5" cy="14.5" r="1"/>`),
   trim: S(`<path d="M4 18 20 6"/><path d="M4 6l7 5"/><path d="M13 13l7 5" stroke-dasharray="2 2"/><path d="M8 3l3 7-3 1"/>`),
   extend: S(`<path d="M4 18h9"/><path d="M13 18h7" stroke-dasharray="2 2"/><path d="M17 15l3 3-3 3"/><path d="M4 6v12"/>`),

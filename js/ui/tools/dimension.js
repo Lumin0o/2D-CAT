@@ -10,6 +10,9 @@ import { angleSetup, dimMeasure, dimOrientation } from '../../render/annotations
  */
 export class DimensionTool extends Tool {
   get force() { return null; }
+  get usesDrawInput() { return false; }
+  /** Point visé (cotes en chaîne et ordinales). */
+  pointAt(wp) { return pointAt(this.tc, wp); }
   reset() {
     this.picks = [];
     this.previewDim = null;
@@ -114,6 +117,19 @@ export class DimensionTool extends Tool {
   }
 }
 
+/** Point visé : un point, l'extrémité la plus proche d'une ligne touchée, ou le centre d'un arc / cercle. */
+function pointAt(tc, wp) {
+  const hit = tc.hitGeometry(wp);
+  if (!hit) return null;
+  const sk = tc.sketch;
+  if (sk.points.has(hit.id)) return hit.id;
+  const e = sk.entities.get(hit.id);
+  if (!e) return null;
+  if (e.type !== 'line') return e.c || null;
+  const a = sk.points.get(e.p1), b = sk.points.get(e.p2);
+  return Math.hypot(a.x - wp.x, a.y - wp.y) <= Math.hypot(b.x - wp.x, b.y - wp.y) ? e.p1 : e.p2;
+}
+
 /** Cote horizontale ou verticale imposée : une ligne (ses extrémités) ou deux points. */
 function forcedDim(sk, sig, ids, force) {
   let refs = null;
@@ -153,18 +169,6 @@ export class DimVerticalTool extends DimensionTool {
 export class DimChainTool extends DimensionTool {
   reset() { this.chain = null; super.reset(); }
   onActivate() { this.reset(); }
-  /** Point visé : un point, ou l'extrémité la plus proche d'une ligne touchée. */
-  pointAt(wp) {
-    const hit = this.tc.hitGeometry(wp);
-    if (!hit) return null;
-    const sk = this.tc.sketch;
-    if (sk.points.has(hit.id)) return hit.id;
-    const e = sk.entities.get(hit.id);
-    if (!e) return null;
-    if (e.type !== 'line') return e.c || null;
-    const a = sk.points.get(e.p1), b = sk.points.get(e.p2);
-    return Math.hypot(a.x - wp.x, a.y - wp.y) <= Math.hypot(b.x - wp.x, b.y - wp.y) ? e.p1 : e.p2;
-  }
   orient(pos) {
     const sk = this.tc.sketch;
     const [a, b] = this.picks.map((p) => sk.points.get(p.id));
@@ -231,6 +235,76 @@ export class DimChainTool extends DimensionTool {
   }
   onToolbarTap() {
     if (this.chain || this.picks.length) { this.reset(); this.tc.requestDraw(); return true; }
+    return false;
+  }
+}
+
+/**
+ * Cotation ordinale (comme SOLIDWORKS) : on touche l'élément de référence (sommet, ligne, arc…),
+ * puis un tap dans le vide place la cote 0 : au-dessus / en dessous → cotes en X alignées
+ * horizontalement ; à gauche / à droite → cotes en Y alignées verticalement.
+ * Chaque élément touché ensuite reçoit sa cote depuis la référence, alignée sur la cote 0.
+ * Tap dans le vide : fin.
+ */
+export class DimOrdinateTool extends DimensionTool {
+  reset() { this.base = null; this.zero = null; super.reset(); }
+  onActivate() { this.reset(); }
+  hint() {
+    if (this.zero) return 'Touchez les éléments à coter · tap dans le vide : fin';
+    if (this.base) return 'Touchez dans le vide pour placer la cote 0';
+    return 'Cote ordinale : touchez l\'élément de référence (cote 0)';
+  }
+  zeroAt(pos) {
+    const B = this.tc.sketch.points.get(this.base);
+    if (!B) return null;
+    const axis = Math.abs(pos.y - B.y) >= Math.abs(pos.x - B.x) ? 'h' : 'v';
+    return { type: 'ordZero', refs: [this.base], axis, pos: { x: pos.x, y: pos.y } };
+  }
+  ordDim(pid) {
+    const sk = this.tc.sketch;
+    const zero = sk.constraints.get(this.zero);
+    if (!zero || pid === this.base) return null;
+    const c = forcedDim(sk, 'PP', [this.base, pid], zero.axis);
+    if (!c) return null;
+    const k = { type: c.type, refs: c.refs, ord: this.zero };
+    k.value = dimMeasure(sk, k);
+    return k;
+  }
+  setBase(pid) { this.base = pid; this.highlight = new Set([pid]); this.updateHint(); }
+  track(wp) {
+    this.cursor = { x: wp.x, y: wp.y, kind: null };
+    const sk = this.tc.sketch;
+    if (this.zero && !sk.constraints.has(this.zero)) { this.zero = null; this.base = null; this.highlight = new Set(); }
+    if (this.zero) { const pid = this.pointAt(wp); this.previewDim = pid ? this.ordDim(pid) : null; }
+    else if (this.base) this.previewDim = this.tc.hitGeometry(wp) ? null : this.zeroAt(wp);
+    else this.previewDim = null;
+    this.tc.requestDraw();
+  }
+  onRelease(wp) {
+    this.cursor = null; this.previewDim = null;
+    const sk = this.tc.sketch;
+    if (this.zero && !sk.constraints.has(this.zero)) this.reset();     // cote 0 annulée ou supprimée
+    if (this.base && !sk.points.has(this.base)) this.reset();
+    const pid = this.pointAt(wp);
+    if (this.zero) {
+      if (!pid) { this.reset(); this.tc.requestDraw(); return; }
+      const k = this.ordDim(pid);
+      if (k) { this.highlight = new Set([this.base, pid]); this.tc.createDimension(k, 'Cote ordinale'); }
+      else if (pid !== this.base) this.tc.toast(sk.constraints.get(this.zero).axis === 'h' ? 'Même position en X que la cote 0' : 'Même position en Y que la cote 0');
+      this.updateHint();
+    } else if (pid) this.setBase(pid);
+    else if (this.base) {
+      const z = this.zeroAt(wp);
+      if (z) {
+        const id = this.tc.createDimension(z, 'Cote ordinale 0');
+        if (id) { this.zero = id; this.highlight = new Set([this.base]); }
+      }
+      this.updateHint();
+    }
+    this.tc.requestDraw();
+  }
+  onToolbarTap() {
+    if (this.base || this.zero) { this.reset(); this.tc.requestDraw(); return true; }
     return false;
   }
 }

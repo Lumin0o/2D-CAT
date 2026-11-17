@@ -1,5 +1,9 @@
 // Classe de base des outils de tracé.
 // Cycle : onPress (doigt posé) → onMove (aperçu qui suit le doigt) → onRelease (le point est posé).
+// Réglage « Poser les points » (settings.drawInput) :
+//   'tap'  : un toucher par point (glisser avant de lâcher ajuste le point) ;
+//   'drag' : premier point là où le doigt se pose, deuxième là où il se lève ; les suivants au toucher ;
+//   'both' : glisser dès le premier point trace directement, sinon touchers successifs.
 // Le contexte « tc » est fourni par l'application (esquisse, aimantation, historique, messages).
 import { dist, sub, perp, norm, dot } from '../../core/geom.js';
 import { endpointEntities, outwardTangentAt } from '../../core/query.js';
@@ -14,17 +18,53 @@ export class Tool {
     this.onActivate();
   }
   onActivate() { this.reset(); }
-  reset() { this.pts = []; this.cursor = null; this.updateHint(); }
+  reset() { this.pts = []; this.cursor = null; this.press = null; this.dragged = false; this.updateHint(); }
 
-  onPress(wp) { this.cursor = this.tc.snap(wp); this.onCursor(true); this.tc.requestDraw(); }
-  onMove(wp) { this.cursor = this.tc.snap(wp); this.onCursor(false); this.tc.requestDraw(); }
-  onRelease(wp) {
-    const s = this.tc.snap(wp);
-    this.cursor = null;
-    this.place(s);
+  /** Les outils de tracé suivent le réglage glisser-lâcher (pas les cotes). */
+  get usesDrawInput() { return true; }
+  drawInput() { return this.usesDrawInput ? (this.tc.settings.drawInput || 'tap') : 'tap'; }
+
+  onPress(wp) {
+    this.cursor = this.tc.snap(wp);
+    // glisser-lâcher possible : le premier point sera celui où le doigt s'est posé
+    this.press = this.pts.length === 0 && this.drawInput() !== 'tap' ? { raw: { x: wp.x, y: wp.y }, snap: this.cursor } : null;
+    this.dragged = false;
+    this.onCursor(true);
     this.tc.requestDraw();
   }
-  onCancel() { this.cursor = null; this.tc.requestDraw(); }
+  onMove(wp) {
+    if (this.press && !this.dragged && dist(this.press.raw, wp) > this.tc.tolWorld()) {
+      // le doigt glisse : le premier point est posé là où il s'est posé, l'aperçu suit le doigt
+      const n = this.pts.length;
+      this.place(this.press.snap);
+      if (this.pts.length > n) this.dragged = true; else this.press = null;
+    }
+    this.cursor = this.tc.snap(wp);
+    this.onCursor(false);
+    this.tc.requestDraw();
+  }
+  onRelease(wp) {
+    const s = this.tc.snap(wp);
+    const mode = this.drawInput();
+    const tapOnly = this.press && !this.dragged;    // pas de glissement
+    this.cursor = null;
+    this.press = null;
+    if (mode === 'drag' && tapOnly && this.pts.length === 0) {
+      this.tc.toast('Glissez du premier point au deuxième');
+      this.tc.requestDraw();
+      return;
+    }
+    this.place(s);
+    this.dragged = false;
+    this.tc.requestDraw();
+  }
+  onCancel() {
+    // deux doigts pendant un glisser-lâcher : le premier point n'est pas gardé
+    if (this.dragged) { this.pts = []; this.dragged = false; this.updateHint(); }
+    this.press = null;
+    this.cursor = null;
+    this.tc.requestDraw();
+  }
   onCursor(/* pressed */) {}
 
   place(s) {
@@ -35,7 +75,11 @@ export class Tool {
   step() {}
   preview(/* d, st */) {}
   hint() { return ''; }
-  updateHint() { this.tc.setHint(this.hint()); }
+  updateHint() {
+    let h = this.hint();
+    if (h && this.pts.length === 0 && this.usesDrawInput && this.tc.settings.drawInput === 'drag') h = h.replace(/^Touchez (l['’]|le |la |les |un |une )?/, (m, art) => 'Glissez depuis ' + (art || ''));
+    this.tc.setHint(h);
+  }
   /** Appui sur l'outil déjà actif : renvoie true si l'outil a traité l'appui (fin de chaîne). */
   onToolbarTap() { return false; }
 

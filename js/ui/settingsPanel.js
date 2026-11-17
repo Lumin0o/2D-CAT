@@ -1,4 +1,4 @@
-// Panneau Réglages (plein écran). Étape 1 : thème, barre d'outils, favoris, appui long, réinitialisation.
+// Panneau Réglages (plein écran) : thème, barre d'outils, tracé, favoris, appui long, réinitialisation.
 import { GROUPS, describeFavorite } from './tools/registry.js';
 import { icon } from './icons.js';
 import { popoverItem, popoverTitle } from './popover.js';
@@ -51,7 +51,8 @@ export class SettingsPanel {
     // --- Barre d'outils ---
     body.appendChild(title('Barre d\'outils'));
     card = document.createElement('div'); card.className = 'card';
-    card.appendChild(row('Cases visibles (6 ou 12)', segmented([[1, '1 ligne'], [2, '2 lignes']], s.get('toolbarRows'), (v) => { s.set('toolbarRows', v); this.render(); })));
+    card.appendChild(row('Cases par ligne', segmented([[5, '5'], [6, '6'], [7, '7'], [8, '8']], this.app.toolbar.cellsPerRow(), (v) => { s.set('toolbarCells', v); this.render(); })));
+    card.appendChild(row('Lignes', segmented([[1, '1 ligne'], [2, '2 lignes']], s.get('toolbarRows'), (v) => { s.set('toolbarRows', v); this.render(); })));
     const lp = document.createElement('button');
     lp.className = 'row';
     lp.innerHTML = `<span class="row-label">Durée de l'appui long</span><span class="row-value">${fmtNumber(s.get('longPressMs') / 1000, 2)} s<span class="chev">${icon('chevronRight')}</span></span>`;
@@ -66,10 +67,23 @@ export class SettingsPanel {
     card.appendChild(lp);
     body.appendChild(card);
 
+    // --- Tracé ---
+    body.appendChild(title('Tracé'));
+    card = document.createElement('div'); card.className = 'card';
+    card.appendChild(row('Poser les points', segmented([['tap', 'Touchers'], ['drag', 'Glisser'], ['both', 'Les deux']], s.get('drawInput'), (v) => { s.set('drawInput', v); this.render(); })));
+    const how = {
+      tap: 'Un toucher par point : 2 touchers (3 pour certains outils). Glisser avant de lâcher ajuste le point.',
+      drag: 'Posez le doigt sur le premier point, glissez et lâchez sur le deuxième. Le troisième point éventuel se pose d\u2019un toucher.',
+      both: 'Touchers successifs, ou glisser-lâcher : un doigt qui glisse dès le premier point trace directement.',
+    }[s.get('drawInput')] || '';
+    const note = document.createElement('div'); note.className = 'row-note'; note.textContent = how;
+    card.appendChild(note);
+    body.appendChild(card);
+
     // --- Favoris ---
     body.appendChild(title('Favoris de la barre réduite'));
     card = document.createElement('div'); card.className = 'card';
-    const n = s.get('toolbarRows') === 2 ? 12 : 6;
+    const n = (s.get('toolbarRows') === 2 ? 2 : 1) * this.app.toolbar.cellsPerRow();
     const favs = s.get('favorites');
     for (let i = 0; i < n; i++) {
       const d = describeFavorite(favs[i]);
