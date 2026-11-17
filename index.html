@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Esquisse">
+<meta name="theme-color" content="#f2f2f7">
+<meta name="format-detection" content="telephone=no">
+<title>Esquisse 2D</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+<script>
+// Surveillance du démarrage : écran de chargement (avec le nombre de fichiers reçus) si l'app tarde,
+// écran d'erreur seulement en cas d'erreur réelle ou si plus rien n'arrive pendant 25 s.
+(function () {
+  var errs = window.__bootErrors = [];
+  var t0 = Date.now(), lastCount = 0, lastProgress = Date.now();
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t !== window && (t.src || t.href)) errs.push('Fichier non chargé : ' + String(t.src || t.href).split('/').slice(-2).join('/'));
+    else errs.push((e.message || 'Erreur') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : ''));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) { errs.push(String((e.reason && e.reason.message) || e.reason)); });
+  var BOX = 'position:fixed;inset:0;z-index:999;background:#1c1c1e;color:#f2f2f0;font:15px -apple-system,system-ui,sans-serif;padding:calc(env(safe-area-inset-top) + 24px) 20px 20px;overflow:auto';
+  function received() {
+    try { return performance.getEntriesByType('resource').filter(function (r) { return /\.(js|css)(\?|$)/.test(r.name); }).length; } catch (e) { return 0; }
+  }
+  function status() { return 'En ligne : ' + navigator.onLine + ' · SW : ' + !!(navigator.serviceWorker && navigator.serviceWorker.controller); }
+  window.__showBootFail = function (why) {
+    if (window.__booted || document.getElementById('boot-fail')) return;
+    var l = document.getElementById('boot-loading'); if (l) l.remove();
+    var d = document.createElement('div');
+    d.id = 'boot-fail';
+    d.setAttribute('style', BOX);
+    var msg = errs.length ? errs.join('\n') : (why || 'Démarrage trop long.');
+    d.innerHTML = '<h2 style="margin:0 0 10px">L\u2019app n\u2019a pas démarré</h2>' +
+      '<p style="color:#aeaeb2">Rouvrez-la. Si le problème revient, faites une capture de cet écran.</p>' +
+      '<pre style="white-space:pre-wrap;background:#2c2c2e;padding:10px;border-radius:10px;font-size:12px"></pre>' +
+      '<button style="margin-top:14px;min-height:44px;padding:0 18px;border-radius:12px;border:0;background:#0a84ff;color:#fff;font-size:16px" onclick="location.reload()">Recharger</button>';
+    d.querySelector('pre').textContent = msg + '\n\n' + status() + ' · fichiers reçus : ' + received();
+    document.body.appendChild(d);
+  };
+  var timer = setInterval(function () {
+    if (window.__booted) { clearInterval(timer); var l0 = document.getElementById('boot-loading'); if (l0) l0.remove(); return; }
+    var n = received();
+    if (n !== lastCount) { lastCount = n; lastProgress = Date.now(); }
+    if (errs.length) { clearInterval(timer); window.__showBootFail(); return; }
+    if (Date.now() - lastProgress > 25000) {
+      clearInterval(timer);
+      window.__showBootFail(window.__modulesLoaded ? 'Démarrage bloqué (stockage ?).'
+        : 'Plus aucun fichier reçu depuis 25 s : le serveur (ou le tunnel) ne répond plus, et l\u2019app n\u2019est pas encore enregistrée pour le hors-ligne.');
+      return;
+    }
+    if (Date.now() - t0 > 3000 && document.body) {
+      var l = document.getElementById('boot-loading');
+      if (!l) {
+        l = document.createElement('div'); l.id = 'boot-loading'; l.setAttribute('style', BOX);
+        l.innerHTML = '<h2 style="margin:0 0 10px">Chargement de l\u2019app\u2026</h2><p style="color:#aeaeb2">Première ouverture ou mise à jour : les fichiers arrivent du serveur. Ensuite l\u2019app s\u2019ouvre tout de suite, même sans réseau.</p><p id="boot-count" style="margin-top:12px;font-variant-numeric:tabular-nums"></p>';
+        document.body.appendChild(l);
+      }
+      document.getElementById('boot-count').textContent = 'Fichiers reçus : ' + n + ' · ' + Math.round((Date.now() - t0) / 1000) + ' s';
+    }
+  }, 500);
+})();
+</script>
+</head>
+<body>
+<div id="app" class="app">
+
+  <header id="toolbar" class="toolbar">
+    <div id="toolbar-cells" class="toolbar-cells"></div>
+    <button id="toolbar-toggle" class="toolbar-toggle" aria-label="Développer la barre d'outils"></button>
+  </header>
+
+  <div id="toolbar-expanded" class="toolbar-expanded" hidden>
+    <div id="toolbar-groups" class="toolbar-groups"></div>
+    <button id="toolbar-collapse" class="toolbar-toggle" aria-label="Réduire la barre d'outils"></button>
+  </div>
+
+  <main id="canvas-wrap" class="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="hint" class="hint" hidden></div>
+    <div id="relbar" class="relbar" hidden></div>
+    <div class="overlay overlay-bl">
+      <button id="btn-undo" class="round-btn" aria-label="Annuler"></button>
+      <button id="btn-redo" class="round-btn" aria-label="Rétablir"></button>
+    </div>
+    <div class="overlay overlay-br">
+      <button id="btn-multi" class="round-btn" aria-label="Sélection multiple"></button>
+      <div class="overlay-col">
+        <button id="btn-delete" class="round-btn danger" aria-label="Supprimer" hidden></button>
+        <button id="btn-fit" class="round-btn" aria-label="Tout afficher"></button>
+      </div>
+    </div>
+    <div id="toast" class="toast" hidden></div>
+  </main>
+
+  <footer class="footer">
+    <div id="infobar" class="infobar">
+      <div class="infobar-line1">
+        <span id="info-main" class="info-main"></span>
+        <span id="info-extra" class="info-extra"></span>
+      </div>
+      <div id="info-state" class="infobar-line2"></div>
+    </div>
+    <div class="bottom-row">
+      <button id="btn-snap" class="bottom-btn green"><span class="bb-icon"></span><span class="bb-label">Aimantation et grille</span></button>
+      <button id="btn-files" class="bottom-btn green"><span class="bb-icon"></span><span class="bb-label">Fichiers</span></button>
+      <button id="btn-settings" class="bottom-btn red"><span class="bb-icon"></span><span class="bb-label">Réglages</span></button>
+    </div>
+  </footer>
+
+  <div id="popover-layer" class="popover-layer"></div>
+  <div id="settings-panel" class="panel" hidden></div>
+  <div id="keypad" class="keypad" hidden></div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
