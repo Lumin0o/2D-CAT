@@ -1,9 +1,16 @@
 // Requêtes sur l'esquisse : test de toucher, infos d'entité, points caractéristiques.
 import { dist, distToSegment, distToArc, arcInfo, sub, angleOf, TAU, mid, add, fromAngle } from './geom.js';
 
+/** Distance d'un point à la droite (a, b) prise en entier (ligne infinie). */
+function distToLine(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy);
+  if (l < 1e-12) return dist(p, a);
+  return Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / l;
+}
+
 /** Distance d'un point du monde à une entité. */
 export function entityDistance(sk, e, wp) {
-  if (e.type === 'line') return distToSegment(wp, sk.points.get(e.p1), sk.points.get(e.p2));
+  if (e.type === 'line') return (e.infinite ? distToLine : distToSegment)(wp, sk.points.get(e.p1), sk.points.get(e.p2));
   if (e.type === 'circle') return Math.abs(dist(wp, sk.points.get(e.c)) - e.r);
   if (e.type === 'arc') return distToArc(wp, sk.points.get(e.c), sk.points.get(e.s), sk.points.get(e.e), e.ccw);
   return Infinity;
@@ -27,7 +34,7 @@ export function hitTest(sk, wp, tolPoint, tolEntity = tolPoint) {
   return best;
 }
 
-/** Longueur d'une entité (ligne, arc) ou périmètre (cercle). */
+/** Longueur d'une entité (ligne, arc) ou périmètre (cercle). Ligne infinie : distance entre ses deux points. */
 export function entityLength(sk, e) {
   if (e.type === 'line') return dist(sk.points.get(e.p1), sk.points.get(e.p2));
   if (e.type === 'circle') return TAU * e.r;
@@ -39,7 +46,7 @@ export function entityLength(sk, e) {
 export function keyPoints(sk, e) {
   const out = [];
   if (e.type === 'line') {
-    out.push({ kind: 'midpoint', ...mid(sk.points.get(e.p1), sk.points.get(e.p2)) });
+    if (!e.infinite) out.push({ kind: 'midpoint', ...mid(sk.points.get(e.p1), sk.points.get(e.p2)) });
   } else if (e.type === 'circle') {
     const c = sk.points.get(e.c);
     for (let k = 0; k < 4; k++) out.push({ kind: 'quadrant', ...add(c, fromAngle(k * Math.PI / 2, e.r)) });
@@ -58,7 +65,7 @@ export function closestOnEntity(sk, e, wp) {
     const a = sk.points.get(e.p1), b = sk.points.get(e.p2);
     const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
     let t = l2 > 0 ? ((wp.x - a.x) * dx + (wp.y - a.y) * dy) / l2 : 0;
-    t = Math.max(0, Math.min(1, t));
+    if (!e.infinite) t = Math.max(0, Math.min(1, t));
     return { x: a.x + dx * t, y: a.y + dy * t };
   }
   const c = sk.points.get(e.c);
@@ -68,7 +75,7 @@ export function closestOnEntity(sk, e, wp) {
 }
 
 function onEntity(sk, e, p, eps) {
-  if (e.type === 'line') return distToSegment(p, sk.points.get(e.p1), sk.points.get(e.p2)) <= eps;
+  if (e.type === 'line') return entityDistance(sk, e, p) <= eps;
   if (e.type === 'circle') return true;
   return distToArc(p, sk.points.get(e.c), sk.points.get(e.s), sk.points.get(e.e), e.ccw) <= eps;
 }
@@ -84,7 +91,8 @@ export function entityIntersections(sk, e1, e2) {
     const den = rx * sy - ry * sx;
     if (Math.abs(den) > 1e-12) {
       const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / den, u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / den;
-      if (t >= -1e-9 && t <= 1 + 1e-9 && u >= -1e-9 && u <= 1 + 1e-9) out.push({ x: a.x + rx * t, y: a.y + ry * t });
+      const inT = e1.infinite || (t >= -1e-9 && t <= 1 + 1e-9), inU = e2.infinite || (u >= -1e-9 && u <= 1 + 1e-9);
+      if (inT && inU) out.push({ x: a.x + rx * t, y: a.y + ry * t });
     }
     return out;
   }
@@ -98,7 +106,7 @@ export function entityIntersections(sk, e1, e2) {
     if (A < 1e-18 || disc < 0) return out;
     for (const sgn of [-1, 1]) {
       const t = (-B + sgn * Math.sqrt(disc)) / (2 * A);
-      if (t < -1e-9 || t > 1 + 1e-9) continue;
+      if (!e1.infinite && (t < -1e-9 || t > 1 + 1e-9)) continue;
       const p = { x: a.x + dx * t, y: a.y + dy * t };
       if (onEntity(sk, e2, p, eps * Math.max(1, r))) out.push(p);
     }
@@ -124,6 +132,7 @@ export function entityInsideRect(sk, e, r) {
     const c = sk.points.get(e.c);
     return inside({ x: c.x - e.r, y: c.y - e.r }) && inside({ x: c.x + e.r, y: c.y + e.r });
   }
+  if (e.infinite) return false;          // une ligne infinie ne tient jamais dans un cadre
   return sk.entityPointIds(e).every((pid) => inside(sk.points.get(pid)));
 }
 export function entityTouchesRect(sk, e, r) {
@@ -134,6 +143,12 @@ export function entityTouchesRect(sk, e, r) {
   }
   if (e.type === 'line') {
     const a = sk.points.get(e.p1), b = sk.points.get(e.p2);
+    if (e.infinite) {
+      // la droite traverse le cadre si ses coins ne sont pas tous du même côté
+      const side = (p) => Math.sign((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x));
+      const s = [side({ x: r.minX, y: r.minY }), side({ x: r.maxX, y: r.minY }), side({ x: r.maxX, y: r.maxY }), side({ x: r.minX, y: r.maxY })];
+      return s.some((v) => v >= 0) && s.some((v) => v <= 0);
+    }
     if (inside(a) || inside(b)) return true;
     // segment traversant le rectangle sans extrémité dedans
     const corners = [{ x: r.minX, y: r.minY }, { x: r.maxX, y: r.minY }, { x: r.maxX, y: r.maxY }, { x: r.minX, y: r.maxY }];

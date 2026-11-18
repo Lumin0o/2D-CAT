@@ -54,6 +54,36 @@ export class ConstructionLineTool extends LineTool {
   get construction() { return true; }
 }
 
+/**
+ * Ligne infinie (construction) : une droite passant par deux points, tracée d'un bord à l'autre de l'écran.
+ * Ses deux points servent à la placer (aimantation, cotes, relations) ; elle n'a pas de longueur.
+ */
+export class InfiniteLineTool extends Tool {
+  hint() { return this.pts.length === 0 ? 'Touchez un premier point de la ligne infinie' : 'Touchez un deuxième point'; }
+  step() {
+    if (this.pts.length < 2) return;
+    const [a, b] = this.pts;
+    if (this.samePoint(a, b)) { this.pts = [a]; return; }
+    const sk = this.tc.sketch;
+    const end = this.tc.autoAlign(a, b);
+    const p1 = this.tc.resolvePoint(a);
+    const p2 = this.tc.resolvePoint(end);
+    if (p1.id === p2.id) { this.pts = [a]; return; }
+    const line = sk.addLine(p1.id, p2.id, { construction: true, infinite: true });
+    if (end.align === 'h') sk.addConstraint('horizontal', [line.id]);
+    if (end.align === 'v') sk.addConstraint('vertical', [line.id]);
+    this.tc.commit('Ligne infinie');
+    this.pts = [];
+  }
+  preview(d) {
+    if (this.pts.length === 1 && this.cursor) {
+      const end = this.tc.autoAlign(this.pts[0], this.cursor);
+      if (Math.hypot(end.x - this.pts[0].x, end.y - this.pts[0].y) > 1e-9) d.infiniteLine(this.pts[0], end, true);
+      d.point(this.pts[0]);
+    }
+  }
+}
+
 /** Ligne par le milieu : premier point = milieu, deuxième = une extrémité. */
 export class LineMidTool extends Tool {
   get construction() { return false; }

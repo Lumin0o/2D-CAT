@@ -164,10 +164,23 @@ export class Renderer {
     if (st.dragMarker) this.drawSnapMarker(st.dragMarker, C);
   }
 
+  /** Deux points de la droite (a, b) en dehors de la vue, de part et d'autre : tracé d'une ligne infinie. */
+  infiniteEnds(a, b) {
+    const vp = this.vp;
+    const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy);
+    if (l < 1e-12) return [a, b];
+    const u = { x: dx / l, y: dy / l };
+    const c = vp.toWorld({ x: vp.width / 2, y: vp.height / 2 });
+    const R = vp.pxToWorld(Math.hypot(vp.width, vp.height)) + 1;
+    const t0 = (c.x - a.x) * u.x + (c.y - a.y) * u.y;
+    return [{ x: a.x + u.x * (t0 - R), y: a.y + u.y * (t0 - R) }, { x: a.x + u.x * (t0 + R), y: a.y + u.y * (t0 + R) }];
+  }
+
   traceEntity(sk, e) {
     this.worldPath((c) => {
       if (e.type === 'line') {
-        const a = sk.points.get(e.p1), b = sk.points.get(e.p2);
+        let a = sk.points.get(e.p1), b = sk.points.get(e.p2);
+        if (e.infinite) [a, b] = this.infiniteEnds(a, b);
         c.moveTo(a.x, a.y); c.lineTo(b.x, b.y);
       } else if (e.type === 'circle') {
         const o = sk.points.get(e.c);
@@ -398,11 +411,15 @@ export class Renderer {
   }
 
   /** Petit traceur passé aux outils pour leur aperçu. */
-  previewDrawer(C) {
+  previewDrawer(C, color = C.preview) {
     const self = this, ctx = this.ctx;
-    const style = (dashed) => { ctx.strokeStyle = C.preview; ctx.lineWidth = 2; ctx.setLineDash(dashed ? [6, 5] : []); };
+    const style = (dashed) => { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dashed ? [6, 5] : []); };
     return {
+      /** Aperçu du résultat d'une modification (miroir, décaler, copier…) : en jaune. */
+      get ghost() { return self.previewDrawer(C, C.ghost); },
       line(a, b, dashed = false) { style(dashed); self.worldPath((c) => { c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); }); ctx.stroke(); ctx.setLineDash([]); },
+      /** Droite passant par a et b, tracée d'un bord à l'autre de la vue. */
+      infiniteLine(a, b, dashed = false) { const [p, q] = self.infiniteEnds(a, b); this.line(p, q, dashed); },
       polyline(pts, close = false, dashed = false) {
         if (pts.length < 2) return; style(dashed);
         self.worldPath((c) => { c.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y); if (close) c.closePath(); });
@@ -410,8 +427,8 @@ export class Renderer {
       },
       circle(o, r, dashed = false) { style(dashed); self.worldPath((c) => c.arc(o.x, o.y, r, 0, TAU)); ctx.stroke(); ctx.setLineDash([]); },
       arc(o, r, a1, a2, ccw, dashed = false) { style(dashed); self.worldPath((c) => c.arc(o.x, o.y, r, a1, a2, !ccw)); ctx.stroke(); ctx.setLineDash([]); },
-      point(p) { self.drawPoint(self.vp.toScreen(p), C.preview, 3.5, C.canvasBg); },
-      sketchPoint(p) { self.drawSketchPoint(self.vp.toScreen(p), C.preview, 4.5, C.canvasBg); },
+      point(p) { self.drawPoint(self.vp.toScreen(p), color, 3.5, C.canvasBg); },
+      sketchPoint(p) { self.drawSketchPoint(self.vp.toScreen(p), color, 4.5, C.canvasBg); },
       /** Mesure du Mètre : pointillés verts et ses deux bouts. */
       measure(a, b) {
         ctx.strokeStyle = C.green; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);

@@ -73,8 +73,13 @@ const bboxOf = (sk, ids) => {
   ok(cl && cl.includes(l[1].id) && cl.includes(l[2].id), 'coin : les deux lignes');
   const r = filletLines(sk, cl[0], cl[1], 5);
   ok(r.ok, 'congé R5');
-  ok(!sk.points.has(pts[2]), 'ancien coin supprimé');
+  ok(r.corner === pts[2] && sk.points.has(pts[2]), 'coin d\'origine gardé');
+  const consAtCorner = [...sk.entities.values()].filter((e) => e.construction && (e.p1 === pts[2] || e.p2 === pts[2]));
+  ok(consAtCorner.length === 2, 'deux lignes de construction jusqu\'au coin');
+  ok([...sk.constraints.values()].filter((k) => k.type === 'collinear').length === 2, 'lignes de construction colinéaires');
+  ok([...sk.constraints.values()].some((k) => k.type === 'dimRadius' && k.refs[0] === r.arc && k.value === 5), 'cote R5 ajoutée');
   ok(solve(sk).ok && analyze(sk).over.size === 0, 'congé : solveur ok, pas de sur-contrainte');
+  ok(near(P(sk, pts[2]).x, 40) && near(P(sk, pts[2]).y, 20), 'le coin reste au sommet');
   const arc = sk.entities.get(r.arc);
   const c = P(sk, arc.c);
   ok(near(c.x, 35) && near(c.y, 15) && near(dist(c, P(sk, arc.s)), 5), 'centre (35, 15), rayon 5');
@@ -88,6 +93,44 @@ const bboxOf = (sk, ids) => {
   const b = sk2.addLine(sk2.addPoint(10, 2).id, sk2.addPoint(10, 12).id);
   const r2 = filletLines(sk2, a.id, b.id, 1);
   ok(r2.ok && near(P(sk2, a.p2).x, 9) && near(P(sk2, b.p1).y, 1), 'congé entre deux lignes séparées : prolongées jusqu\'au congé');
+  ok(near(P(sk2, r2.corner).x, 10) && near(P(sk2, r2.corner).y, 0), 'lignes séparées : coin virtuel à l\'intersection');
+}
+
+// ---- Congé / chanfrein : ce qui était attaché au coin reste en place ----
+{
+  const sk = new Sketch();
+  const { l, pts } = rect(sk, 0, 0, 40, 20, true);
+  sk.addConstraint('dimLength', [l[0].id], { value: 40, pos: { x: 20, y: -5 } });
+  sk.addConstraint('dimLength', [l[1].id], { value: 20, pos: { x: 45, y: 10 } });
+  // diagonale de construction de l'origine au coin opposé (point partagé)
+  const diag = sk.addLine(pts[0], pts[2], { construction: true });
+  ok(solve(sk).ok && analyze(sk).state === 'full', 'rectangle coté : entièrement contraint');
+  const r = filletLines(sk, ...cornerLines(sk, pts[2]), 6);
+  ok(r.ok && sk.entities.get(diag.id).p2 === pts[2], 'la diagonale reste sur le coin');
+  ok([...sk.constraints.values()].filter((k) => k.type === 'dimDistance').length === 1, 'cote de longueur → cote jusqu\'au coin');
+  const ch = chamferLines(sk, ...cornerLines(sk, pts[1]), 4);
+  ok(ch.ok && [...sk.constraints.values()].filter((k) => k.type === 'dimLength' && k.value === 4).length === 2, 'chanfrein : deux cotes de 4');
+  ok([...sk.constraints.values()].filter((k) => k.type === 'dimDistance').length === 2, 'les deux cotes de longueur vont de coin à coin');
+  ok(solve(sk).ok, 'solveur ok');
+  const an = analyze(sk);
+  ok(an.over.size === 0 && an.state === 'full', 'congé + chanfrein cotés : toujours entièrement contraint');
+  ok(near(P(sk, pts[2]).x, 40) && near(P(sk, pts[2]).y, 20) && near(P(sk, pts[1]).x, 40) && near(P(sk, pts[1]).y, 0), 'coins à leur place');
+  // la cote de largeur pilote toujours le contour
+  for (const k of sk.constraints.values()) if (k.type === 'dimDistance' && k.value === 40) k.value = 50;
+  ok(solve(sk).ok && near(P(sk, pts[2]).x, 50) && near(P(sk, pts[1]).x, 50), 'largeur changée : coins et congé suivent');
+  const arc = sk.entities.get(r.arc);
+  ok(near(P(sk, arc.c).x, 44) && near(P(sk, arc.c).y, 14), 'centre du congé suit (44, 14)');
+}
+
+// ---- Colinéaire entre deux lignes bout à bout ----
+{
+  const sk = new Sketch();
+  const a = sk.addPoint(0, 0).id, b = sk.addPoint(10, 1).id, c = sk.addPoint(20, 0).id;
+  const L1 = sk.addLine(a, b), L2 = sk.addLine(b, c, { construction: true });
+  sk.addConstraint('collinear', [L1.id, L2.id]);
+  ok(solve(sk).ok && analyze(sk).over.size === 0, 'colinéaire avec point partagé : pas de sur-contrainte');
+  const A = P(sk, a), B = P(sk, b), C = P(sk, c);
+  ok(Math.abs((B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)) < 1e-6, 'les trois points sont alignés');
 }
 
 // ---- Ajuster ----

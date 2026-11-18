@@ -424,6 +424,9 @@ button.row { width: 100%; text-align: left; }
 .round-btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 #btn-box.on { background: var(--green); border-color: var(--green); }
 .relbar { right: 56px; }
+/* cases de relations plus basses, pour moins cacher le dessin */
+.relbar .rel-chip { min-height: 32px; padding: 0 10px; border-radius: 10px; gap: 6px; }
+.relbar .rel-chip .glyph { width: 18px; height: 18px; font-size: 11px; }
 
 /* Actions de l'outil en cours (Valider, Garder l'original…) sous l'indication */
 .toolacts {

@@ -32,7 +32,11 @@ export class InfoBar {
       const e = sketch.entities.get(id);
       const p = sketch.points.get(id);
       const k = sketch.constraints.get(id);
-      if (e && e.type === 'line') {
+      if (e && e.type === 'line' && e.infinite) {
+        const a = sketch.points.get(e.p1), b = sketch.points.get(e.p2);
+        main = 'Ligne infinie';
+        extra = `Angle ${fmtAngle(normAngle(angleOf(sub(b, a))), S)}`;
+      } else if (e && e.type === 'line') {
         const a = sketch.points.get(e.p1), b = sketch.points.get(e.p2);
         main = `Longueur ${fmtLength(entityLength(sketch, e), S)}`;
         extra = `Angle ${fmtAngle(normAngle(angleOf(sub(b, a))), S)}`;

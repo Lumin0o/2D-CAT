@@ -84,6 +84,7 @@ function setEnd(sk, e, key, pid) {
 export function trimAt(sk, eid, wp) {
   const e = sk.entities.get(eid);
   if (!e) return { ok: false };
+  if (e.infinite) return { ok: false, msg: 'Une ligne infinie ne s\'ajuste pas (supprimez-la)' };
   const cuts = cutsOf(sk, e);
   if (e.type === 'circle') return trimCircle(sk, e, wp, cuts);
   const total = e.type === 'line' ? 1 : arcSweep(sk, e);
@@ -147,6 +148,7 @@ function trimCircle(sk, e, wp, cuts) {
 export function extendAt(sk, eid, wp) {
   const e = sk.entities.get(eid);
   if (!e || e.type === 'circle') return { ok: false, msg: 'Touchez une ligne ou un arc, près du bout à prolonger' };
+  if (e.infinite) return { ok: false, msg: 'Une ligne infinie n\'a pas de bout à prolonger' };
   const [kS, kE] = e.type === 'line' ? ['p1', 'p2'] : ['s', 'e'];
   const S = P(sk, e[kS]), E = P(sk, e[kE]);
   const atStart = dist(wp, S) < dist(wp, E);
@@ -192,7 +194,7 @@ function rayHits(sk, o, from, d) {
   if (o.type === 'line') {
     const a = P(sk, o.p1), b = P(sk, o.p2);
     const h = lineLineIntersection(from, add(from, d), a, b);
-    if (h && h.u >= -1e-9 && h.u <= 1 + 1e-9) out.push(h.point);
+    if (h && (o.infinite || (h.u >= -1e-9 && h.u <= 1 + 1e-9))) out.push(h.point);
     return out;
   }
   const { c, r } = circleOf(sk, o);
@@ -215,7 +217,7 @@ function circleHits(sk, o, c, r) {
     if (A < 1e-18 || disc < 0) return out;
     for (const sg of [-1, 1]) {
       const t = (-B + sg * Math.sqrt(disc)) / (2 * A);
-      if (t >= -1e-9 && t <= 1 + 1e-9) out.push(add(a, mul(d, t)));
+      if (o.infinite || (t >= -1e-9 && t <= 1 + 1e-9)) out.push(add(a, mul(d, t)));
     }
     return out;
   }
@@ -240,8 +242,10 @@ function onArc(sk, o, q) {
 // ---------- Congé / chanfrein ----------
 /** Deux lignes du coin : celles dont pid est une extrémité (exactement deux lignes). */
 export function cornerLines(sk, pid) {
-  const es = endpointEntities(sk, pid);
-  if (es.length !== 2 || es.some((e) => e.type !== 'line')) return null;
+  let es = endpointEntities(sk, pid);
+  // les lignes de construction qui partent du coin (diagonale, coin virtuel…) ne comptent pas
+  if (es.length > 2) es = es.filter((e) => !e.construction);
+  if (es.length !== 2 || es.some((e) => e.type !== 'line' || e.infinite)) return null;
   return [es[0].id, es[1].id];
 }
 function cornerSetup(sk, A, B) {
@@ -260,15 +264,47 @@ function cornerSetup(sk, A, B) {
     const far = P(sk, L[nearKey === 'p1' ? 'p2' : 'p1']);
     return { L, nearKey, far, u: norm(sub(far, X)), len: dist(far, X) };
   };
-  return { X, a: side(A), b: side(B) };
+  return { X, shared, a: side(A), b: side(B) };
+}
+/**
+ * Coin « virtuel » gardé après un congé / chanfrein : le sommet d'origine reste, relié aux nouvelles extrémités
+ * par deux lignes de construction colinéaires aux lignes. Tout ce qui y était attaché (autres entités, cotes,
+ * relations) reste donc en place, et une cote de longueur d'une des lignes devient la cote sommet → bout opposé.
+ * @returns {{xId:string, c1:object, c2:object}}
+ */
+function keepCorner(sk, cs, T1id, T2id) {
+  const { X, shared, a, b } = cs;
+  const xId = shared || sk.addPoint(X.x, X.y).id;
+  for (const s of [a, b]) {
+    const L = s.L, near = L[s.nearKey], far = L[s.nearKey === 'p1' ? 'p2' : 'p1'];
+    for (const [cid, k] of sk.constraints) {
+      if (k.refs.includes(L.id)) {
+        if (k.type === 'dimLength' && shared) { k.type = 'dimDistance'; k.refs = [xId, far]; }
+        else if (k.type === 'dimLength' || k.type === 'midpoint' || k.type === 'equal') sk.constraints.delete(cid);
+      } else if (!shared && ['dimDistance', 'dimHorizontal', 'dimVertical'].includes(k.type) && k.refs.length === 2 && k.refs.includes(near) && k.refs.includes(far)) {
+        sk.constraints.delete(cid);
+      }
+    }
+  }
+  // lignes de construction d'abord : le sommet ne doit pas être supprimé comme point orphelin
+  const c1 = sk.addLine(T1id, xId, { construction: true });
+  const c2 = sk.addLine(T2id, xId, { construction: true });
+  setEnd(sk, a.L, a.nearKey, T1id);
+  setEnd(sk, b.L, b.nearKey, T2id);
+  sk.addConstraint('collinear', [a.L.id, c1.id]);
+  sk.addConstraint('collinear', [b.L.id, c2.id]);
+  return { xId, c1, c2 };
 }
 /**
  * Congé de rayon r entre deux lignes (qui se rejoignent ou dont les prolongements se coupent).
- * @returns {{ok:boolean, msg?:string, arc?:string}}
+ * Le coin d'origine est gardé (lignes de construction) et une cote de rayon verrouille le congé
+ * (opts.dim = false pour s'en passer ; opts.gap : écart du texte au-delà du coin).
+ * @returns {{ok:boolean, msg?:string, arc?:string, corner?:string}}
  */
-export function filletLines(sk, idA, idB, r) {
+export function filletLines(sk, idA, idB, r, opts = {}) {
   const A = sk.entities.get(idA), B = sk.entities.get(idB);
   if (!A || !B || A.type !== 'line' || B.type !== 'line' || idA === idB) return { ok: false, msg: 'Le congé se fait entre deux lignes' };
+  if (A.infinite || B.infinite) return { ok: false, msg: 'Pas de congé sur une ligne infinie' };
   const cs = cornerSetup(sk, A, B);
   if (!cs) return { ok: false, msg: 'Lignes parallèles : congé impossible' };
   const { X, a, b } = cs;
@@ -279,20 +315,25 @@ export function filletLines(sk, idA, idB, r) {
   const T1 = add(X, mul(a.u, t)), T2 = add(X, mul(b.u, t));
   const C = add(X, mul(norm(add(a.u, b.u)), r / Math.sin(th / 2)));
   const ccw = cross(sub(T1, C), sub(T2, C)) > 0;
-  const old = [[A, A.p1, A.p2], [B, B.p1, B.p2]];
-  for (const [L, e1, e2] of old) dropLengthConstraints(sk, L, [e1, e2]);
   const p1 = sk.addPoint(T1.x, T1.y), p2 = sk.addPoint(T2.x, T2.y), pc = sk.addPoint(C.x, C.y);
-  setEnd(sk, A, a.nearKey, p1.id);
-  setEnd(sk, B, b.nearKey, p2.id);
+  const { xId } = keepCorner(sk, cs, p1.id, p2.id);
   const arc = sk.addArc(pc.id, p1.id, p2.id, ccw, { construction: A.construction && B.construction });
   sk.addConstraint('tangent', [arc.id, A.id]);
   sk.addConstraint('tangent', [arc.id, B.id]);
-  return { ok: true, arc: arc.id };
+  if (opts.dim !== false) {
+    const gap = opts.gap ?? r;
+    sk.addConstraint('dimRadius', [arc.id], { value: r, pos: add(X, mul(norm(sub(X, C)), gap)) });
+  }
+  return { ok: true, arc: arc.id, corner: xId };
 }
-/** Chanfrein à distances égales d entre deux lignes. */
-export function chamferLines(sk, idA, idB, d) {
+/**
+ * Chanfrein à distances égales d entre deux lignes. Le coin d'origine est gardé (lignes de construction)
+ * et deux cotes (coin → chaque extrémité du chanfrein) le verrouillent (opts.dim = false pour s'en passer).
+ */
+export function chamferLines(sk, idA, idB, d, opts = {}) {
   const A = sk.entities.get(idA), B = sk.entities.get(idB);
   if (!A || !B || A.type !== 'line' || B.type !== 'line' || idA === idB) return { ok: false, msg: 'Le chanfrein se fait entre deux lignes' };
+  if (A.infinite || B.infinite) return { ok: false, msg: 'Pas de chanfrein sur une ligne infinie' };
   const cs = cornerSetup(sk, A, B);
   if (!cs) return { ok: false, msg: 'Lignes parallèles : chanfrein impossible' };
   const { X, a, b } = cs;
@@ -300,12 +341,19 @@ export function chamferLines(sk, idA, idB, d) {
   if (th < 1e-4 || th > Math.PI - 1e-4) return { ok: false, msg: 'Lignes alignées : chanfrein impossible' };
   if (!(d > 0) || d >= a.len - 1e-9 || d >= b.len - 1e-9) return { ok: false, msg: 'Distance trop grande pour ces lignes' };
   const T1 = add(X, mul(a.u, d)), T2 = add(X, mul(b.u, d));
-  for (const L of [A, B]) dropLengthConstraints(sk, L, [L.p1, L.p2]);
   const p1 = sk.addPoint(T1.x, T1.y), p2 = sk.addPoint(T2.x, T2.y);
-  setEnd(sk, A, a.nearKey, p1.id);
-  setEnd(sk, B, b.nearKey, p2.id);
+  const { xId, c1, c2 } = keepCorner(sk, cs, p1.id, p2.id);
   const line = sk.addLine(p1.id, p2.id, { construction: A.construction && B.construction });
-  return { ok: true, line: line.id };
+  if (opts.dim !== false) {
+    const gap = opts.gap ?? d / 2;
+    // chaque cote du côté extérieur du coin (à l'opposé de l'autre ligne)
+    for (const [c, s, o] of [[c1, a, b], [c2, b, a]]) {
+      let n = perp(s.u);
+      if (dot(n, o.u) > 0) n = mul(n, -1);
+      sk.addConstraint('dimLength', [c.id], { value: d, pos: add(mid(X, add(X, mul(s.u, d))), mul(n, gap)) });
+    }
+  }
+  return { ok: true, line: line.id, corner: xId };
 }
 
 // ---------- Contour (chaîne d'entités reliées) ----------
@@ -314,14 +362,14 @@ const ends = (e) => (e.type === 'line' ? [e.p1, e.p2] : e.type === 'arc' ? [e.s,
  * Chaîne d'entités reliées bout à bout à partir de eid (lignes et arcs ; on s'arrête aux embranchements).
  * @returns {{items:Array<{id:string, rev:boolean}>, closed:boolean}}
  */
-export function chainFrom(sk, eid, { chain = true } = {}) {
+export function chainFrom(sk, eid, { chain = true, within = null } = {}) {
   const e0 = sk.entities.get(eid);
   if (!e0) return { items: [], closed: false };
   if (e0.type === 'circle') return { items: [{ id: eid, rev: false }], closed: true };
-  if (!chain) return { items: [{ id: eid, rev: false }], closed: false };
+  if (!chain || e0.infinite) return { items: [{ id: eid, rev: false }], closed: false };
   // les lignes de construction ne font pas partie d'un contour (et inversement)
   const nextAt = (pid, fromId) => {
-    const es = endpointEntities(sk, pid).filter((e) => e.id !== fromId && !!e.construction === !!e0.construction);
+    const es = endpointEntities(sk, pid).filter((e) => e.id !== fromId && !e.infinite && !!e.construction === !!e0.construction && (!within || within.has(e.id)));
     return es.length === 1 ? es[0] : null;
   };
   const items = [{ id: eid, rev: false }];
@@ -353,6 +401,57 @@ export function chainFrom(sk, eid, { chain = true } = {}) {
     }
   }
   return { items, closed };
+}
+
+/**
+ * Contours à décaler pour des entités désignées (toucher ou cadre) : la chaîne complète de chacune (chain),
+ * sinon seulement les entités désignées, reliées entre elles. Une entité ne sert qu'une fois.
+ */
+export function chainsFor(sk, ids, { chain = true } = {}) {
+  const set = new Set(ids.filter((id) => sk.entities.has(id)));
+  const out = [], used = new Set();
+  for (const id of set) {
+    if (used.has(id)) continue;
+    const c = chainFrom(sk, id, chain ? {} : { within: set });
+    if (c.items.some((it) => used.has(it.id))) continue;
+    for (const it of c.items) used.add(it.id);
+    out.push(c);
+  }
+  return out;
+}
+/** Sens de parcours d'un contour fermé : +1 trigonométrique, -1 horaire. */
+function chainOrientation(sk, chain) {
+  const first = sk.entities.get(chain.items[0].id);
+  if (first.type === 'circle') return 1;
+  const pts = [];
+  for (const it of chain.items) {
+    const e = sk.entities.get(it.id);
+    const [a, b] = ends(e);
+    pts.push(P(sk, it.rev ? b : a));
+    if (e.type === 'arc') pts.push(pointOnArcAt(sk, e, arcSweep(sk, e) / 2));
+  }
+  let A = 0;
+  for (let i = 0; i < pts.length; i++) A += cross(pts[i], pts[(i + 1) % pts.length]);
+  return A >= 0 ? 1 : -1;
+}
+/**
+ * Côté de décalage de chaque contour d'après le doigt : celui du contour le plus proche ; les autres contours
+ * fermés sont décalés du même côté (tous vers l'extérieur ou tous vers l'intérieur), les contours ouverts
+ * du côté où se trouve le doigt.
+ * @returns {{sides:number[], d:number}|null}
+ */
+export function offsetSides(sk, chains, wp) {
+  const per = chains.map((c) => offsetSide(sk, c, wp));
+  let ref = -1;
+  per.forEach((s, i) => { if (s && (ref < 0 || s.d < per[ref].d)) ref = i; });
+  if (ref < 0) return null;
+  const oRef = chains[ref].closed ? chainOrientation(sk, chains[ref]) : 0;
+  const sides = chains.map((c, i) => {
+    if (i === ref) return per[ref].side;
+    if (oRef && c.closed) return per[ref].side * oRef * chainOrientation(sk, c);
+    return per[i] ? per[i].side : per[ref].side;
+  });
+  return { sides, d: per[ref].d };
 }
 
 // ---------- Décaler ----------
@@ -468,7 +567,7 @@ export function offsetChain(sk, chain, d, side, opts = {}) {
     const [a, b] = g.it.rev ? [endPts[i], startPts[i]] : [startPts[i], endPts[i]];
     let ne;
     if (g.kind === 'line') {
-      ne = sk.addLine(a, b, cons);
+      ne = sk.addLine(a, b, { ...cons, infinite: e.infinite });
       sk.addConstraint('parallel', [e.id, ne.id]);
     } else {
       ne = sk.addArc(e.c, a, b, e.ccw, cons);
@@ -540,7 +639,7 @@ export function mirrorEntities(sk, ids, axisId) {
     if (id === axisId) continue;
     const e = sk.entities.get(id);
     if (!e) { if (sk.points.has(id) && P(sk, id).sketchPoint) mapPoint(id); continue; }
-    const opt = { construction: e.construction };
+    const opt = { construction: e.construction, infinite: e.infinite };
     if (e.type === 'line') made.push(sk.addLine(mapPoint(e.p1), mapPoint(e.p2), opt).id);
     else if (e.type === 'circle') { const c = sk.addCircle(mapPoint(e.c), e.r, opt); sk.addConstraint('equal', [e.id, c.id]); made.push(c.id); }
     else {

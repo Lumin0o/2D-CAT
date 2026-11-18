@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.1.
+Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.2.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -60,7 +60,7 @@
 - **Ajuster intelligent** : toucher une portion la supprime jusqu'aux intersections voisines (toute l'entité si elle n'en a pas ; un cercle demande deux intersections). Balayer le doigt à travers plusieurs entités les ajuste toutes, en un seul « annuler ». Les nouvelles extrémités sont coïncidentes avec l'entité qui coupe ; une ligne coupée au milieu donne deux morceaux colinéaires.
 - **Prolonger** : toucher une ligne ou un arc près du bout à prolonger ; il va jusqu'à la première entité rencontrée (bout libre seulement).
 - **Décaler** : toucher le contour (les entités reliées bout à bout sont prises ensemble), puis le côté ; l'aperçu suit le doigt et la distance se saisit au clavier. Coins raccordés, lignes parallèles à l'original, arcs concentriques.
-- **Miroir** : toucher les éléments à copier, Valider, puis toucher la ligne de symétrie. Les points sur l'axe sont partagés, les autres reçoivent une relation de symétrie (la copie suit l'original).
+- **Symétrie** (anciennement Miroir) : toucher les éléments à copier, Valider, puis toucher la ligne de symétrie. Les points sur l'axe sont partagés, les autres reçoivent une relation de symétrie (la copie suit l'original).
 - **Congé** / **Chanfrein** : toucher un coin (point qui relie deux lignes) ou deux lignes, puis le rayon / la distance au clavier. Avec une sélection (par ex. un rectangle encadré), tous ses coins sont traités d'un coup. Congé tangent aux deux lignes.
 - **Déplacer** / **Copier** : sélection (ou toucher les éléments puis Valider), point de départ puis point d'arrivée (aimantés), avec aperçu. Les liens avec le reste de l'esquisse sont retirés (comme SOLIDWORKS sans « garder les relations »). Copier reste actif pour d'autres copies.
 - **Pivoter** : sélection, centre de rotation, puis l'angle au clavier (positif = sens inverse des aiguilles d'une montre). Relations H / V échangées pour un quart de tour, retirées pour un angle quelconque.
@@ -80,6 +80,17 @@
 - Décaler : petite fenêtre d'options sous la barre d'outils (gardées dans les réglages) : **Sélectionner la chaîne** (entités reliées bout à bout, sans les lignes de construction), **Ajouter une cote** (cote de la distance + relations « décalage identique » D : tout le contour suit la cote ; pour un cercle ou des arcs seuls, cote de rayon de la copie), **Construction**.
 - Barre réduite : la dernière case affiche le dernier groupe utilisé qui n'a pas déjà sa case (réglages : « Case n · Dernier groupe utilisé »).
 - Glisser un point sur une entité (ligne, cercle, arc, milieu, intersection) l'y aimante ; au lâcher, il devient coïncident (ou point milieu), comme pendant le tracé.
+
+## Retours iPhone intégrés (0.3.2)
+
+- Cases de la barre de relations moins hautes.
+- **Ligne infinie** (groupe Construction) : une droite de construction passant par deux points, tracée d'un bord à l'autre de l'écran. On s'y aimante sur toute sa longueur ; elle sert d'axe, de référence de cote ou de coupe pour Ajuster. Pas de longueur (pas de cote de longueur, pas d'ajuster / prolonger / congé sur elle). Une fenêtre ne la prend jamais entièrement ; une capture la prend si elle traverse le cadre.
+- **Cadre de sélection dans les outils** Symétrie, Décaler, Congé / Chanfrein (et Déplacer, Copier, Pivoter) : activer le cadre ne quitte plus ces outils pendant le choix des éléments. Symétrie : le cadre ajoute ou retire des éléments. Décaler : plusieurs contours d'un coup (les contours fermés sont tous décalés du même côté, extérieur ou intérieur). Congé / chanfrein : tous les coins pris dans le cadre.
+- **Colinéaire** entre deux lignes bout à bout : n'est plus vue à tort comme une sur-contrainte.
+- **Congé et chanfrein** : le coin d'origine est gardé, relié aux nouvelles extrémités par deux lignes de construction colinéaires. Ce qui y était attaché (diagonale, cotes, relations) reste donc en place ; une cote de longueur d'une des lignes devient la cote jusqu'au coin. Une cote de rayon est ajoutée au congé, deux cotes (coin → bouts du chanfrein) au chanfrein.
+- Aperçus de Symétrie, Décaler, Déplacer et Copier en jaune.
+- Les icônes de relations ne se posent plus sur une entité, un point ou une autre icône.
+- L'outil Miroir s'appelle maintenant **Symétrie**.
 
 ## Tester sur ordinateur
 

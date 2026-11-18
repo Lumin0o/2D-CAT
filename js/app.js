@@ -311,6 +311,7 @@ export class App {
       under: c.under, full: c.full, over: c.over,
       selected: dark ? '#ffb340' : '#ff8a00',
       preview: dark ? '#9ad0ff' : '#1f6fe5',
+      ghost: dark ? '#ffd60a' : '#d9a300',      // aperçu jaune des modifications (miroir, décaler, copier…)
       guide: dark ? '#8a8a90' : '#9a9aa0',
       snap: dark ? '#ffd60a' : '#c98a00',
       origin: dark ? '#ff6b5e' : '#d8392b',
@@ -497,14 +498,16 @@ export class App {
    * pointillée, éléments touchés), ou aucun : sélection simple, et glisser dans le vide déplace la vue.
    */
   setSelMode(mode) {
-    if (mode && this.tool) this.setTool(null);     // passer en sélection quitte l'outil en cours
+    // passer en sélection quitte l'outil en cours, sauf le cadre pour les outils qui s'en servent
+    // (symétrie, décaler, congé…, pendant le choix des éléments)
+    if (mode && this.tool && !(mode === 'box' && this.tool.acceptsBox)) this.setTool(null);
     this.selMode = mode;
     this.els.multi.classList.toggle('on', mode === 'multi');
     this.els.box.classList.toggle('on', mode === 'box');
     this.els.multi.setAttribute('aria-pressed', String(mode === 'multi'));
     this.els.box.setAttribute('aria-pressed', String(mode === 'box'));
     showToast(mode === 'multi' ? 'Sélection multiple : chaque toucher ajoute ou retire'
-      : mode === 'box' ? 'Sélection par cadre : glissez vers la droite (fenêtre) ou vers la gauche (capture)'
+      : mode === 'box' ? (this.tool ? 'Cadre : glissez pour désigner les éléments de l\'outil' : 'Sélection par cadre : glissez vers la droite (fenêtre) ou vers la gauche (capture)')
       : 'Sélection simple · glisser dans le vide déplace la vue', { ms: 2400 });
   }
   get multi() { return this.selMode !== null; }
@@ -602,13 +605,24 @@ export class App {
     this.touch = !!g && g.type !== 'mouse';
     this.finger = s;
     const wp = this.vp.toWorld(s);
-    if (this.tool) { this.tool.onPress(wp); return; }
+    if (this.tool) {
+      // outil qui accepte le cadre : un glissement trace un cadre au lieu d'aller à l'outil
+      this.toolBox = this.selMode === 'box' && this.tool.acceptsBox ? { startS: s, startW: wp, active: false } : null;
+      this.tool.onPress(wp);
+      return;
+    }
     this.drag = { hit: this.hitAt(s, wp), startS: s, startW: wp, lastS: s, active: false };
   }
   onMove(s) {
     this.finger = s;
     const wp = this.vp.toWorld(s);
-    if (this.tool) { this.tool.onMove(wp); return; }
+    if (this.tool) {
+      const tb = this.toolBox;
+      if (tb && !tb.active && dist(s, tb.startS) >= DRAG_PX) { tb.active = true; this.tool.onCancel(); }
+      if (tb && tb.active) { this.box = this.makeBox(tb.startS, tb.startW, s, wp); this.requestDraw(); return; }
+      this.tool.onMove(wp);
+      return;
+    }
     const d = this.drag;
     if (!d) return;
     if (!d.active) {
@@ -623,11 +637,7 @@ export class App {
       this.vp.pan(s.x - d.lastS.x, s.y - d.lastS.y);
       d.panned = true;
     } else {
-      this.box = {
-        minX: Math.min(d.startW.x, wp.x), maxX: Math.max(d.startW.x, wp.x),
-        minY: Math.min(d.startW.y, wp.y), maxY: Math.max(d.startW.y, wp.y),
-        crossing: s.x < d.startS.x,
-      };
+      this.box = this.makeBox(d.startS, d.startW, s, wp);
     }
     d.lastS = s;
     this.requestDraw();
@@ -636,6 +646,19 @@ export class App {
     const wp = this.vp.toWorld(s);
     this.finger = null;
     if (this.tool) {
+      const tb = this.toolBox; this.toolBox = null;
+      if (tb && tb.active) {
+        const box = this.box; this.box = null;
+        if (!info.cancelled && box && this.tool.onBox) {
+          const ids = [...this.boxHits(box, false)];
+          const inBox = (p) => p.x >= box.minX && p.x <= box.maxX && p.y >= box.minY && p.y <= box.maxY;
+          const points = [...this.sketch.points.values()].filter((p) => p.id !== ORIGIN_ID && inBox(p)).map((p) => p.id);
+          this.tool.onBox({ ids, points });
+          if (this.tool) this.tool.updateHint();
+        }
+        this.refreshUI();
+        return;
+      }
       if (info.cancelled) this.tool.onCancel(); else this.tool.onRelease(wp);
       return;
     }
@@ -651,7 +674,7 @@ export class App {
   }
   onCancel() {
     this.finger = null;
-    if (this.tool) { this.tool.onCancel(); return; }
+    if (this.tool) { this.toolBox = null; this.box = null; this.tool.onCancel(); return; }
     const d = this.drag; this.drag = null;
     if (d && d.active && d.start) this.restorePositions(d.start);
     this.box = null;
@@ -770,6 +793,18 @@ export class App {
    * sont ajoutés à la sélection ; ceux qui y étaient déjà en sont retirés.
    */
   finishBox(box) {
+    for (const id of this.boxHits(box)) { if (this.selection.has(id)) this.selection.delete(id); else this.selection.add(id); }
+  }
+  /** Cadre (monde) entre le point de départ et le doigt : vers la gauche = capture. */
+  makeBox(startS, startW, s, wp) {
+    return {
+      minX: Math.min(startW.x, wp.x), maxX: Math.max(startW.x, wp.x),
+      minY: Math.min(startW.y, wp.y), maxY: Math.max(startW.y, wp.y),
+      crossing: s.x < startS.x,
+    };
+  }
+  /** Éléments pris dans le cadre : entités, points isolés et (withDims) cotes. */
+  boxHits(box, withDims = true) {
     const sk = this.sketch;
     const hit = new Set();
     const inBox = (p) => p.x >= box.minX && p.x <= box.maxX && p.y >= box.minY && p.y <= box.maxY;
@@ -778,6 +813,7 @@ export class App {
       if (ok) hit.add(e.id);
     }
     for (const p of sk.points.values()) if (p.sketchPoint && inBox(p)) hit.add(p.id);
+    if (!withDims) return hit;
     // cotes : par leur texte (rectangle écran ramené en monde)
     const a = this.vp.toScreen({ x: box.minX, y: box.maxY }), b = this.vp.toScreen({ x: box.maxX, y: box.minY });
     for (const k of sk.constraints.values()) {
@@ -792,7 +828,7 @@ export class App {
       const touch = t.x + hw >= a.x && t.x - hw <= b.x && t.y + hh >= a.y && t.y - hh <= b.y;
       if (box.crossing ? touch : inside) hit.add(k.id);
     }
-    for (const id of hit) { if (this.selection.has(id)) this.selection.delete(id); else this.selection.add(id); }
+    return hit;
   }
   deleteSelection() {
     if (this.selection.size === 0) return;
@@ -918,7 +954,7 @@ export class App {
     const k = sk.constraints.get(id);
     if (k && isDimension(k)) { this.editDimension(id); return; }
     const e = sk.entities.get(id);
-    if (!e) return;
+    if (!e || e.infinite) return;
     if (e.type === 'line') this.lengthKeypad('Longueur de la ligne', entityLength(sk, e), (mm, flip) => this.setEntityValue(id, mm, flip), { flippable: true });
     else {
       const r = e.type === 'circle' ? e.r : dist(sk.points.get(e.c), sk.points.get(e.s));

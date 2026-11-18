@@ -45,6 +45,7 @@ export class Sketch {
   // ----- Entités -----
   addLine(p1, p2, opts = {}) {
     const e = { id: this.newId('e'), type: 'line', p1, p2, construction: !!opts.construction };
+    if (opts.infinite) e.infinite = true;      // ligne infinie (construction) : droite passant par p1 et p2
     this.entities.set(e.id, e);
     return e;
   }

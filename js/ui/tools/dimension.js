@@ -46,6 +46,7 @@ export class DimensionTool extends Tool {
     switch (sig) {
       case 'L': {
         const e = sk.entities.get(ids[0]);
+        if (e.infinite) return null;          // une ligne infinie n'a pas de longueur
         const a = sk.points.get(e.p1), b = sk.points.get(e.p2);
         const o = pos ? dimOrientation(a, b, pos) : 'aligned';
         const eps = 1e-9 * Math.max(1, Math.abs(a.x) + Math.abs(a.y));
@@ -152,7 +153,7 @@ function pointAt(tc, wp) {
 /** Cote horizontale ou verticale imposée : une ligne (ses extrémités) ou deux points. */
 function forcedDim(sk, sig, ids, force) {
   let refs = null;
-  if (sig === 'L') { const e = sk.entities.get(ids[0]); refs = [e.p1, e.p2]; }
+  if (sig === 'L') { const e = sk.entities.get(ids[0]); if (e.infinite) return null; refs = [e.p1, e.p2]; }
   else if (sig === 'PP') refs = ids;
   if (!refs) return null;
   const a = sk.points.get(refs[0]), b = sk.points.get(refs[1]);

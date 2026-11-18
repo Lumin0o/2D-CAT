@@ -1,5 +1,5 @@
 // Registre des groupes d'outils (comme SOLIDWORKS) et des classes d'outils.
-import { LineTool, LineMidTool, ConstructionLineTool, ConstructionLineMidTool } from './line.js';
+import { LineTool, LineMidTool, ConstructionLineTool, ConstructionLineMidTool, InfiniteLineTool } from './line.js';
 import { Rect2Tool, RectCenterTool, Rect3CornerTool, Rect3CenterTool, ParallelogramTool } from './rect.js';
 import { CircleCenterTool, Circle3Tool } from './circle.js';
 import { ArcCenterTool, Arc3Tool, ArcTangentTool } from './arc.js';
@@ -37,6 +37,7 @@ export const GROUPS = [
   { id: 'construction', label: 'Construction', tools: [
     { id: 'constructionLine', label: 'Ligne de construction', icon: 'construction' },
     { id: 'constructionMid', label: 'Ligne de construction par le milieu', icon: 'constructionMid' },
+    { id: 'infiniteLine', label: 'Ligne infinie', sub: 'Construction, par deux points', icon: 'infiniteLine' },
     { id: 'toggleConstruction', label: 'Basculer en construction', icon: 'constructionToggle' },
   ] },
   { id: 'dimension', label: 'Cotation', tools: [
@@ -56,8 +57,8 @@ export const GROUPS = [
   { id: 'offset', label: 'Décaler', tools: [
     { id: 'offset', label: 'Décaler les entités', icon: 'offset' },
   ] },
-  { id: 'mirror', label: 'Miroir', tools: [
-    { id: 'mirror', label: 'Miroir', sub: 'Par rapport à une ligne', icon: 'mirror' },
+  { id: 'mirror', label: 'Symétrie', tools: [
+    { id: 'mirror', label: 'Symétrie', sub: 'Copie symétrique par rapport à une ligne', icon: 'mirror' },
   ] },
   { id: 'fillet', label: 'Congé', tools: [
     { id: 'fillet', label: 'Congé d\'esquisse', icon: 'fillet' },
@@ -91,6 +92,7 @@ export const TOOL_CLASSES = {
   dimOrdinate: DimOrdinateTool,
   constructionLine: ConstructionLineTool,
   constructionMid: ConstructionLineMidTool,
+  infiniteLine: InfiniteLineTool,
   toggleConstruction: ToggleConstructionTool,
   measure: MeasureTool,
   trim: TrimTool,

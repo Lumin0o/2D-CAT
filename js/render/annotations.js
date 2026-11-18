@@ -3,6 +3,7 @@
 import { sub, add, mul, dot, cross, norm, perp, dist, angleOf, fromAngle, arcInfo, lineLineIntersection, mid } from '../core/geom.js';
 import { fmtLengthShort, fmtAngle } from '../core/units.js';
 import { isAnnotation } from '../core/solver.js';
+import { entityDistance } from '../core/query.js';
 
 const P = (sk, id) => sk.points.get(id);
 const curveOf = (sk, e) => { const c = P(sk, e.c); return { c, r: e.type === 'circle' ? e.r : dist(c, P(sk, e.s)) }; };
@@ -112,7 +113,7 @@ export function dimLayout(sk, k) {
     out.text = add(a2, mul(d, t));
     return out;
   };
-  const toLine = (p, a, b, sym = false) => {
+  const toLine = (p, a, b, sym = false, inf = false) => {
     const u = norm(sub(b, a)), n = perp(u);
     const L = dist(a, b);
     const t = dot(sub(pos, a), u);
@@ -124,7 +125,7 @@ export function dimLayout(sk, k) {
       const bot = add(foot, mul(n, -h));
       const sg = h >= 0 ? 1 : -1;
       out.ext.push([p, top], [add(p, mul(n, -2 * h)), bot]);
-      if (t < 0) out.ext.push([a, foot]); else if (t > L) out.ext.push([b, foot]);
+      if (!inf) { if (t < 0) out.ext.push([a, foot]); else if (t > L) out.ext.push([b, foot]); }
       out.segs.push([top, bot]);
       out.arrows.push({ p: top, dir: mul(n, sg) }, { p: bot, dir: mul(n, -sg) });
       const s = dot(sub(pos, a), n);
@@ -134,7 +135,7 @@ export function dimLayout(sk, k) {
     }
     out.segs.push([foot, top]);
     out.ext.push([p, top]);
-    if (t < 0) out.ext.push([a, foot]); else if (t > L) out.ext.push([b, foot]);
+    if (!inf) { if (t < 0) out.ext.push([a, foot]); else if (t > L) out.ext.push([b, foot]); }
     const dir = mul(n, h >= 0 ? 1 : -1);
     out.arrows.push({ p: foot, dir: mul(dir, -1) }, { p: top, dir });
     const s = dot(sub(pos, a), n);
@@ -147,8 +148,8 @@ export function dimLayout(sk, k) {
     case 'dimDistance': return aligned(P(sk, k.refs[0]), P(sk, k.refs[1]));
     case 'dimHorizontal': return projected(P(sk, k.refs[0]), P(sk, k.refs[1]), { x: 1, y: 0 });
     case 'dimVertical': return projected(P(sk, k.refs[0]), P(sk, k.refs[1]), { x: 0, y: 1 });
-    case 'dimPointLine': return B ? toLine(P(sk, k.refs[0]), P(sk, B.p1), P(sk, B.p2), k.sym) : null;
-    case 'dimLineLine': return A && B ? toLine(P(sk, B.p1), P(sk, A.p1), P(sk, A.p2), k.sym) : null;
+    case 'dimPointLine': return B ? toLine(P(sk, k.refs[0]), P(sk, B.p1), P(sk, B.p2), k.sym, B.infinite) : null;
+    case 'dimLineLine': return A && B ? toLine(P(sk, B.p1), P(sk, A.p1), P(sk, A.p2), k.sym, A.infinite) : null;
     case 'dimAngle': {
       if (!A || !B) return null;
       const { X, r1, r2 } = angleRays(sk, k);
@@ -236,16 +237,39 @@ export const REL_LABEL = {
   equal: 'Égale', symmetric: 'Symétrique', midpoint: 'Point milieu', fixed: 'Fixe', offsetEq: 'Décalage identique',
 };
 
-/** Positions écran des icônes de relations : [{cid, x, y, type}]. */
+/**
+ * Positions écran des icônes de relations : [{cid, x, y, type}].
+ * Chaque icône est posée à côté de son entité (ou de son point), à la première place libre : jamais sur une
+ * entité, un point ou une autre icône (on essaie le long de l'entité, puis de l'autre côté, puis plus loin).
+ */
 export function layoutBadges(sk, vp) {
   const out = [];
-  const count = new Map();
-  const slot = (key) => { const i = count.get(key) || 0; count.set(key, i + 1); return i; };
+  const R = 9;                                  // demi-côté d'une icône (px), comme BADGE_R du rendu
+  const tolE = vp.pxToWorld(R + 2.5);           // écart minimal icône ↔ entité
+  const ents = [...sk.entities.values()];
+  const pts = [...sk.points.values()].map((p) => vp.toScreen(p));
+  const free = (x, y) => {
+    for (const b of out) if (Math.abs(b.x - x) < 2 * R + 2 && Math.abs(b.y - y) < 2 * R + 2) return false;
+    for (const q of pts) if (Math.abs(q.x - x) < R + 5 && Math.abs(q.y - y) < R + 5) return false;
+    const w = vp.toWorld({ x, y });
+    for (const e of ents) if (entityDistance(sk, e, w) < tolE) return false;
+    return true;
+  };
+  /** Pose l'icône à la première position libre de la liste (sinon à la première). */
+  const place = (cid, type, cands) => {
+    const c = cands.find((q) => free(q.x, q.y)) || cands[0];
+    out.push({ cid, type, x: c.x, y: c.y });
+  };
   const atPoint = (cid, type, pid) => {
     const p = P(sk, pid); if (!p) return;
     const s = vp.toScreen(p);
-    const i = slot(pid);
-    out.push({ cid, type, x: s.x + 14 + i * 19, y: s.y - 14 });
+    const cands = [];
+    for (const r of [1, 2, 3]) {
+      const d = 15 * r;
+      cands.push({ x: s.x + d, y: s.y - d }, { x: s.x - d, y: s.y - d }, { x: s.x + d, y: s.y + d }, { x: s.x - d, y: s.y + d },
+        { x: s.x + d + 6, y: s.y }, { x: s.x - d - 6, y: s.y }, { x: s.x, y: s.y - d - 6 }, { x: s.x, y: s.y + d + 6 });
+    }
+    place(cid, type, cands);
   };
   const atEntity = (cid, type, e) => {
     let m, u;
@@ -257,8 +281,15 @@ export function layoutBadges(sk, vp) {
     let ux = u.x, uy = -u.y;
     if (ux < 0 || (ux === 0 && uy < 0)) { ux = -ux; uy = -uy; }
     const nx = uy, ny = -ux;       // normale écran (vers le haut pour une ligne horizontale)
-    const i = slot(e.id);
-    out.push({ cid, type, x: s.x + nx * 19 + ux * 20 * i, y: s.y + ny * 19 + uy * 20 * i });
+    // le long de l'entité (dans la limite de sa longueur à l'écran), d'un côté puis de l'autre, puis plus loin
+    const half = e.type === 'line' && !e.infinite ? dist(vp.toScreen(P(sk, e.p1)), vp.toScreen(P(sk, e.p2))) / 2 : 60;
+    const along = [0];
+    for (let k = 1; k * 21 <= Math.max(21, half); k++) along.push(k * 21, -k * 21);
+    const cands = [];
+    for (const off of [19, 31, 45]) for (const side of [1, -1]) for (const t of along) {
+      cands.push({ x: s.x + nx * off * side + ux * t, y: s.y + ny * off * side + uy * t });
+    }
+    place(cid, type, cands);
   };
   for (const k of sk.constraints.values()) {
     if (isAnnotation(k)) continue;

@@ -105,8 +105,12 @@ export function buildSystem(sk) {
       }
       case 'collinear': {
         if (!(isLine(A) && isLine(B))) break;
-        add(k.id, [A.p1, A.p2, B.p1], [], () => sdist(B.p1, A.p1, A.p2));
-        add(k.id, [A.p1, A.p2, B.p2], [], () => sdist(B.p2, A.p1, A.p2));
+        // un point partagé (lignes bout à bout) est déjà sur l'autre ligne : son équation serait nulle,
+        // et l'analyse la verrait à tort comme redondante (sur-contrainte)
+        for (const q of [B.p1, B.p2]) {
+          if (q === A.p1 || q === A.p2) continue;
+          add(k.id, [A.p1, A.p2, q], [], () => sdist(q, A.p1, A.p2));
+        }
         break;
       }
       case 'parallel': if (isLine(A) && isLine(B)) add(k.id, [A.p1, A.p2, B.p1, B.p2], [], () => sinAng(A, B)); break;
