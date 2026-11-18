@@ -264,8 +264,8 @@ export class DimChainTool extends DimensionTool {
  * puis un tap dans le vide place la cote 0 : au-dessus / en dessous → cotes en X alignées
  * horizontalement ; à gauche / à droite → cotes en Y alignées verticalement.
  * Avec une ligne inclinée (touchée comme référence, ou après un point de référence), c'est comme la cotation
- * intelligente : selon l'endroit où glisse le doigt, les cotes sont horizontales, verticales ou parallèles à la
- * ligne (mesure le long de la ligne).
+ * intelligente : selon l'endroit où glisse le doigt, les cotes sont horizontales, verticales, parallèles à la
+ * ligne (à côté d'elle ou dans les coins à côté d'elle) ou perpendiculaires (coins dans son prolongement).
  * Chaque élément touché ensuite reçoit sa cote depuis la référence, alignée sur la cote 0.
  * Tap dans le vide : fin.
  */
@@ -282,7 +282,7 @@ export class DimOrdinateTool extends DimensionTool {
   }
   hint() {
     if (this.zero) return 'Touchez les éléments à coter · tap dans le vide : fin';
-    if (this.base && this.slantedLine) return 'Glissez pour choisir des cotes horizontales, verticales ou parallèles à la ligne';
+    if (this.base && this.slantedLine) return 'Glissez pour choisir des cotes horizontales, verticales, parallèles ou perpendiculaires à la ligne';
     if (this.base) return 'Touchez dans le vide pour placer la cote 0 · une ligne inclinée : cotes parallèles possibles';
     return 'Cote ordinale : touchez l\'élément de référence (cote 0)';
   }
@@ -299,7 +299,13 @@ export class DimOrdinateTool extends DimensionTool {
       const a = sk.points.get(L.p1), b = sk.points.get(L.p2);
       const minX = Math.min(a.x, b.x, B.x), maxX = Math.max(a.x, b.x, B.x), minY = Math.min(a.y, b.y, B.y), maxY = Math.max(a.y, b.y, B.y);
       const o = dimOrientation({ x: minX, y: minY }, { x: maxX, y: maxY }, pos);
-      if (o === 'aligned') return { type: 'ordZero', refs: [this.base, L.id], axis: 'a', pos: { x: pos.x, y: pos.y } };
+      if (o === 'aligned') {
+        // coins dans le prolongement de la ligne (au-delà de ses bouts) : perpendiculaires ; ailleurs : parallèles
+        const u = sub(b, a), cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+        const corner = (pos.x < minX || pos.x > maxX) && (pos.y < minY || pos.y > maxY);
+        const ext = corner && Math.sign(pos.x - cx) * Math.sign(pos.y - cy) === Math.sign(u.x) * Math.sign(u.y);
+        return { type: 'ordZero', refs: [this.base, L.id], axis: ext ? 'p' : 'a', pos: { x: pos.x, y: pos.y } };
+      }
       return { type: 'ordZero', refs: [this.base], axis: o, pos: { x: pos.x, y: pos.y } };
     }
     const axis = Math.abs(pos.y - B.y) >= Math.abs(pos.x - B.x) ? 'h' : 'v';
@@ -310,8 +316,9 @@ export class DimOrdinateTool extends DimensionTool {
     const zero = sk.constraints.get(this.zero);
     if (!zero || pid === this.base) return null;
     let k;
-    if (zero.axis === 'a') {
+    if (zero.axis === 'a' || zero.axis === 'p') {
       k = { type: 'dimAlong', refs: [this.base, pid, zero.refs[1]], ord: this.zero };
+      if (zero.axis === 'p') k.perp = true;
       const B = sk.points.get(this.base);
       if (dimMeasure(sk, k) < 1e-9 * Math.max(1, Math.abs(B.x) + Math.abs(B.y))) return null;
     } else {
@@ -353,7 +360,7 @@ export class DimOrdinateTool extends DimensionTool {
       if (k) { this.highlight = new Set([this.base, pid]); this.tc.createDimension(k, 'Cote ordinale'); }
       else if (pid !== this.base) {
         const ax = sk.constraints.get(this.zero).axis;
-        this.tc.toast(ax === 'h' ? 'Même position en X que la cote 0' : ax === 'v' ? 'Même position en Y que la cote 0' : 'Même position le long de la ligne que la cote 0');
+        this.tc.toast(ax === 'h' ? 'Même position en X que la cote 0' : ax === 'v' ? 'Même position en Y que la cote 0' : 'Même position que la cote 0 dans cette direction');
       }
       this.updateHint();
     } else {

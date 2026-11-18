@@ -1106,7 +1106,8 @@ export class App {
         // le point passe de l'autre côté de la référence, le long de la ligne
         const L = sk.entities.get(k.refs[2]);
         const [o, p] = [P(k.refs[0]), P(k.refs[1])];
-        const u = norm(sub(P(L.p2), P(L.p1)));
+        let u = norm(sub(P(L.p2), P(L.p1)));
+        if (k.perp) u = perp(u);
         Object.assign(p, add(p, mul(u, -2 * dot(sub(p, o), u))));
         for (const id of [k.refs[0], k.refs[1], L.p1, L.p2]) w.set(id, HEAVY);
         break;

@@ -61,7 +61,7 @@ export function dimMeasure(sk, k) {
     case 'dimLineLine': { const a = P(sk, A.p1), b = P(sk, A.p2); return (k.sym ? 2 : 1) * Math.abs(cross(sub(P(sk, B.p1), a), norm(sub(b, a)))); }
     case 'dimAngle': { const { r1, r2 } = angleRays(sk, k); return Math.abs(Math.atan2(cross(r1, r2), dot(r1, r2))); }
     case 'dimRadius': return curveOf(sk, A).r;
-    case 'dimAlong': { const L = sk.entities.get(k.refs[2]); if (!L) return 0; return Math.abs(dot(sub(P(sk, k.refs[1]), P(sk, k.refs[0])), norm(sub(P(sk, L.p2), P(sk, L.p1))))); }
+    case 'dimAlong': return Math.abs(dot(sub(P(sk, k.refs[1]), P(sk, k.refs[0])), alongDir(sk, k)));
     default: return 0;
   }
 }
@@ -188,17 +188,26 @@ export function dimLayout(sk, k) {
   }
 }
 
+/** Direction (unitaire) de mesure d'une cote dimAlong : le long de sa ligne, ou perpendiculaire (perp). */
+export function alongDir(sk, k) {
+  const L = sk.entities.get(k.refs[2]);
+  if (!L) return { x: 0, y: 0 };
+  const u = norm(sub(P(sk, L.p2), P(sk, L.p1)));
+  return k.perp ? perp(u) : u;
+}
+
 /**
- * Direction de mesure d'une cote 0 : X (axis 'h'), Y (axis 'v') ou le long d'une ligne (axis 'a', refs[1]).
- * Orientée vers la droite (ou vers le haut) pour garder un sens stable.
+ * Direction de mesure d'une cote 0 : X (axis 'h'), Y (axis 'v'), le long d'une ligne (axis 'a', refs[1])
+ * ou perpendiculaire à elle (axis 'p'). Orientée vers la droite (ou vers le haut) pour garder un sens stable.
  */
 export function ordAxis(sk, zero) {
   if (zero.axis === 'h') return { x: 1, y: 0 };
   if (zero.axis === 'v') return { x: 0, y: 1 };
   const L = sk.entities.get(zero.refs[1]);
   if (!L || L.type !== 'line') return null;
-  const u = norm(sub(P(sk, L.p2), P(sk, L.p1)));
+  let u = norm(sub(P(sk, L.p2), P(sk, L.p1)));
   if (u.x === 0 && u.y === 0) return null;
+  if (zero.axis === 'p') u = perp(u);
   return u.x < -1e-12 || (Math.abs(u.x) <= 1e-12 && u.y < 0) ? mul(u, -1) : u;
 }
 
@@ -206,7 +215,8 @@ export function ordAxis(sk, zero) {
  * Cote ordinale : une ligne d'attache du point jusqu'à la ligne de la cote 0, puis la valeur juste après.
  * axis 'h' : mesure en X, valeurs alignées horizontalement (texte vertical, comme SOLIDWORKS) ;
  * axis 'v' : mesure en Y, valeurs alignées verticalement ;
- * axis 'a' : mesure le long d'une ligne, valeurs alignées parallèlement à elle (texte le long des lignes d'attache).
+ * axis 'a' : mesure le long d'une ligne, valeurs alignées parallèlement à elle (texte le long des lignes d'attache) ;
+ * axis 'p' : mesure perpendiculairement à la ligne, valeurs alignées perpendiculairement à elle.
  * Sur la ligne de la cote 0, un trait de cote relie chaque cote à la précédente (du même côté du 0),
  * avec une flèche sur sa ligne d'attache ; la première cote a une flèche à chaque bout (0 ↔ cote).
  * textOut : sens (monde) du décalage du texte vers l'extérieur, appliqué en pixels au rendu ;

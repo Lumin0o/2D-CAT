@@ -147,6 +147,16 @@ const near = (a, b, e = 1e-6) => Math.abs(a - b) < e;
   const z3 = sk.addConstraint('ordZero', [a.id], { axis: 'v', pos: { x: -20, y: 0 } });
   const lv = dimLayout(sk, z3);
   ok(lv.rot === 0 && near(lv.textOut.x, -1), 'cote 0 verticale : texte horizontal, vers la gauche');
+  // perpendiculaire à la ligne : mesure sur la normale (-0,6 ; 0,8)
+  const q2 = sk.addPoint(10, 20);
+  const zp = sk.addConstraint('ordZero', [a.id, L.id], { axis: 'p', pos: { x: 50, y: 10 } });
+  const kp = sk.addConstraint('dimAlong', [a.id, q2.id, L.id], { ord: zp.id, perp: true });
+  kp.value = dimMeasure(sk, kp);
+  ok(near(kp.value, 10), 'perpendiculaire : -10×0,6 + 20×0,8 = 10');
+  kp.value = 15;
+  ok(solve(sk).ok && near(dimMeasure(sk, kp), 15) && near(dimMeasure(sk, k), 30), 'perpendiculaire modifiée à 15, la parallèle reste à 30');
+  const lp = dimLayout(sk, kp);
+  ok(lp && near(lp.textOut.x * 0.8 + lp.textOut.y * 0.6, lp.textOut.x * 0.8 + lp.textOut.y * 0.6) && near(Math.abs(lp.textOut.x * 0.8 + lp.textOut.y * 0.6), 1), 'perpendiculaire : lignes d\'attache parallèles à la ligne');
   sk.removeEntity(L.id);
   sk.cleanupDegenerate();
   ok(!sk.constraints.has(z.id) && !sk.constraints.has(k.id), 'ligne supprimée : cote 0 parallèle et ses cotes supprimées');

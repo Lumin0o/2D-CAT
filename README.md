@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.4.
+Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.5.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -92,11 +92,11 @@
 - Les icônes de relations ne se posent plus sur une entité, un point ou une autre icône.
 - L'outil Miroir s'appelle maintenant **Symétrie**.
 
-## Retours iPhone intégrés (0.3.3 – 0.3.4)
+## Retours iPhone intégrés (0.3.3 – 0.3.5)
 
 - Décaler : « Ajouter une cote » est active par défaut.
 - Décaler : inverser la cote d'un décalage (⇅ au clavier) fait passer **tout le contour décalé** de l'autre côté de l'original, pas seulement la ligne cotée.
-- **Cotation ordinale parallèle à une ligne** : si on touche une ligne inclinée comme référence (ou un point, puis une ligne), comme pour la cotation intelligente, l’endroit où glisse le doigt pour placer la cote 0 choisit des cotes horizontales (au-dessus / en dessous), verticales (à gauche / à droite) ou parallèles à la ligne (à côté d’elle ou dans les coins ; distances mesurées le long de la ligne).
+- **Cotation ordinale parallèle à une ligne** : si on touche une ligne inclinée comme référence (ou un point, puis une ligne), comme pour la cotation intelligente, l’endroit où glisse le doigt pour placer la cote 0 choisit des cotes horizontales (au-dessus / en dessous), verticales (à gauche / à droite) , parallèles à la ligne (à côté d’elle, ou dans les coins situés à côté d’elle ; distances mesurées le long de la ligne) ou perpendiculaires à la ligne (dans les coins situés dans son prolongement, au-delà de ses bouts).
 - Bandeau d'infos : le type de l'élément sélectionné est indiqué (ligne, ligne de construction, ligne infinie, cercle, arc, point, centre, point d'esquisse, origine, type de cote) ; pour plusieurs éléments, le détail (« 2 lignes · 1 cercle »).
 
 ## Tester sur ordinateur

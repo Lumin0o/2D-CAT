@@ -203,10 +203,13 @@ export function buildSystem(sk) {
       }
       case 'dimAlong': {
         // cote ordinale parallèle à une ligne : distance de la référence au point, projetée sur la ligne
+        // (perp : projetée sur la perpendiculaire à la ligne)
         const L = ent(r[2]);
         if (!(P0 && P1) || !isLine(L)) break;
         const proj = () => {
-          const ux = X(L.p2) - X(L.p1), uy = Y(L.p2) - Y(L.p1), l = Math.hypot(ux, uy) || 1;
+          let ux = X(L.p2) - X(L.p1), uy = Y(L.p2) - Y(L.p1);
+          const l = Math.hypot(ux, uy) || 1;
+          if (k.perp) [ux, uy] = [-uy, ux];
           return ((X(r[1]) - X(r[0])) * ux + (Y(r[1]) - Y(r[0])) * uy) / l;
         };
         const sgn = proj() < 0 ? -1 : 1;     // sens actuel (inversable)
