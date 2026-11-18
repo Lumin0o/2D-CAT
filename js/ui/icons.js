@@ -14,7 +14,7 @@ export const ICONS = {
   circle3: S(`<circle cx="12" cy="12" r="8"/>${dot(12, 4)}${dot(4.5, 16)}${dot(19.5, 16)}`),
   arcCenter: S(`<path d="M5 18A9 9 0 0 1 20 10"/>${dot(12, 19)}${dot(5, 18)}${dot(20, 10)}<path d="M12 19 5 18M12 19l8-9" stroke-width="1" stroke-dasharray="2 2"/>`),
   arcTangent: S(`<path d="M3 17h8"/><path d="M11 17A6 6 0 0 0 17 11"/>${dot(11, 17)}${dot(17, 11)}`),
-  point: S(`<circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4" stroke-width="1.4"/>`),
+  point: S(`<path d="M12 5v14M5.9 8.5l12.2 7M5.9 15.5l12.2-7" stroke-width="2"/>`),
   arc3: S(`<path d="M4 17A9 9 0 0 1 20 17"/>${dot(4, 17)}${dot(20, 17)}${dot(12, 8)}`),
   construction: S(`<path d="M4 19 20 5" stroke-dasharray="3 3"/>`),
   constructionToggle: S(`<path d="M4 19 20 5" stroke-dasharray="3 3"/><path d="M4 9h5M4 6h5" stroke-width="1.5"/><path d="M15 18h5M15 15h5"/>`),

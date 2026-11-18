@@ -22,6 +22,6 @@ export class PointTool extends Tool {
     return `X ${this.fmtL(this.cursor.x)} · Y ${this.fmtL(this.cursor.y)}`;
   }
   preview(d) {
-    if (this.cursor) d.point(this.cursor);
+    if (this.cursor) d.sketchPoint(this.cursor);
   }
 }

@@ -133,7 +133,8 @@ export class Renderer {
       if (p.id === ORIGIN_ID) { if (sel.has(p.id) || (hl && hl.has(p.id))) this.drawPoint(vp.toScreen(p), C.selected, 5, C.canvasBg); continue; }
       const selected = sel.has(p.id) || (hl && hl.has(p.id));
       const state = err && err.has(p.id) ? 'over' : (an.points.get(p.id) || 'under');
-      this.drawPoint(vp.toScreen(p), selected ? C.selected : C[state], selected ? 5 : p.sketchPoint ? 4.5 : 3.5, C.canvasBg);
+      if (p.sketchPoint) this.drawSketchPoint(vp.toScreen(p), selected ? C.selected : C[state], selected ? 6 : 4.5, C.canvasBg);
+      else this.drawPoint(vp.toScreen(p), selected ? C.selected : C[state], selected ? 5 : 3.5, C.canvasBg);
     }
 
     // Icônes de relations
@@ -226,6 +227,21 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, 0, 0.5);
+    ctx.restore();
+  }
+
+  /** Point d'esquisse (outil Point) : astérisque à six branches, de la taille d'une extrémité. */
+  drawSketchPoint(s, color, r, bg) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const a of [Math.PI / 2, Math.PI / 6, -Math.PI / 6]) {
+      const dx = Math.cos(a) * r, dy = Math.sin(a) * r;
+      ctx.moveTo(s.x - dx, s.y - dy); ctx.lineTo(s.x + dx, s.y + dy);
+    }
+    ctx.strokeStyle = bg; ctx.lineWidth = 4; ctx.stroke();      // détourage, comme les autres points
+    ctx.strokeStyle = color; ctx.lineWidth = 1.8; ctx.stroke();
     ctx.restore();
   }
 
@@ -366,8 +382,8 @@ export class Renderer {
     const { ctx, vp } = this;
     ctx.font = `600 14px ${FONT}`;
     const w = Math.ceil(ctx.measureText(label).width) + 16, h = 24;
-    let y = cy - R - 2 - h / 2;                          // posé sur le haut du cercle
-    if (y - h / 2 < 4) y = cy + R + 2 + h / 2;           // trop près du bord haut : sous la loupe
+    let y = cy - R + 2;                                   // à cheval sur le haut du cercle
+    if (y - h / 2 < 4) y = cy + R - 2;                    // trop près du bord haut : à cheval sur le bas
     const x = Math.max(w / 2 + 4, Math.min(vp.width - w / 2 - 4, cx));
     ctx.beginPath();
     roundRect(ctx, x - w / 2, y - h / 2, w, h, 7);
@@ -395,6 +411,7 @@ export class Renderer {
       circle(o, r, dashed = false) { style(dashed); self.worldPath((c) => c.arc(o.x, o.y, r, 0, TAU)); ctx.stroke(); ctx.setLineDash([]); },
       arc(o, r, a1, a2, ccw, dashed = false) { style(dashed); self.worldPath((c) => c.arc(o.x, o.y, r, a1, a2, !ccw)); ctx.stroke(); ctx.setLineDash([]); },
       point(p) { self.drawPoint(self.vp.toScreen(p), C.preview, 3.5, C.canvasBg); },
+      sketchPoint(p) { self.drawSketchPoint(self.vp.toScreen(p), C.preview, 4.5, C.canvasBg); },
       guide(a, b) { ctx.strokeStyle = C.guide; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); self.worldPath((c) => { c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); }); ctx.stroke(); ctx.setLineDash([]); },
     };
   }

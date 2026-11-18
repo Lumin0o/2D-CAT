@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.7.
+Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.8.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -47,6 +47,11 @@
 ## Retours iPhone intégrés (0.2.7)
 
 - Loupe de précision : un petit rectangle en haut de la loupe affiche la cote de ce qu'on est en train de tracer, dans l'unité des réglages — longueur (ligne, ligne par le milieu : longueur totale), largeur × hauteur (rectangles, parallélogramme ; d'abord la longueur du premier côté pour les outils 3 points), R (cercles, arcs ; plus l'angle pour l'arc centre et extrémités), X · Y depuis l'origine (outil Point). Sous la loupe s'il n'y a pas la place au-dessus.
+
+## Retours iPhone intégrés (0.2.8)
+
+- Le rectangle de cote est à cheval sur le haut de la loupe (sur le bas si la loupe touche le haut de l'écran).
+- Point d'esquisse : dessiné en astérisque, de la taille des extrémités ; même forme pour l'aperçu et l'icône de l'outil.
 
 ## Tester sur ordinateur
 
