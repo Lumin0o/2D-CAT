@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.6.
+Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.7.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -43,6 +43,10 @@
 ## Ajout (0.2.6)
 
 - Outil Point (groupe Point, barre développée) : un toucher pose un point d'esquisse isolé. Il s'accroche comme les autres outils (milieu → point milieu, sur une entité ou une intersection → coïncident) et peut ensuite être coté, relié par des relations, déplacé ou servir d'extrémité à une ligne. Supprimer une entité qui l'utilise ne le supprime pas. Un seul toucher suffit, quel que soit le réglage « Poser les points ».
+
+## Retours iPhone intégrés (0.2.7)
+
+- Loupe de précision : un petit rectangle en haut de la loupe affiche la cote de ce qu'on est en train de tracer, dans l'unité des réglages — longueur (ligne, ligne par le milieu : longueur totale), largeur × hauteur (rectangles, parallélogramme ; d'abord la longueur du premier côté pour les outils 3 points), R (cercles, arcs ; plus l'angle pour l'arc centre et extrémités), X · Y depuis l'origine (outil Point). Sous la loupe s'il n'y a pas la place au-dessus.
 
 ## Tester sur ordinateur
 

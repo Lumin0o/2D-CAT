@@ -57,6 +57,10 @@ export class Rect2Tool extends Tool {
     if (buildQuad(this.tc, cornersFrom2(a, b), axisAligned)) this.tc.commit('Rectangle');
     this.pts = [];
   }
+  liveValue() {
+    if (this.pts.length !== 1 || !this.cursor) return null;
+    return this.fmtWH(this.cursor.x - this.pts[0].x, this.cursor.y - this.pts[0].y);
+  }
   preview(d) {
     if (this.pts.length === 1 && this.cursor) { d.polyline(cornersFrom2(this.pts[0], this.cursor), true); d.point(this.pts[0]); }
   }
@@ -74,6 +78,10 @@ export class RectCenterTool extends Tool {
     const lines = buildQuad(this.tc, this.corners(c, k), axisAligned);
     if (lines) { addCenterDiagonals(this.tc, lines, c); this.tc.commit('Rectangle par le centre'); }
     this.pts = [];
+  }
+  liveValue() {
+    if (this.pts.length !== 1 || !this.cursor) return null;
+    return this.fmtWH(2 * (this.cursor.x - this.pts[0].x), 2 * (this.cursor.y - this.pts[0].y));
   }
   preview(d) {
     if (this.pts.length === 1 && this.cursor) {
@@ -103,6 +111,15 @@ export class Rect3CornerTool extends Tool {
     if (buildQuad(this.tc, this.corners(a, b, p), rotatedRect)) this.tc.commit('Rectangle 3 points');
     this.pts = [];
   }
+  liveValue() {
+    if (!this.cursor) return null;
+    if (this.pts.length === 1) return this.fmtL(dist(this.pts[0], this.cursor));
+    if (this.pts.length === 2) {
+      const [a, b] = this.pts;
+      return this.fmtWH(dist(a, b), dot(sub(this.cursor, a), perp(norm(sub(b, a)))));
+    }
+    return null;
+  }
   preview(d) {
     if (!this.cursor) return;
     if (this.pts.length === 1) { d.line(this.pts[0], this.cursor); d.point(this.pts[0]); }
@@ -131,6 +148,15 @@ export class Rect3CenterTool extends Tool {
     if (lines) { addCenterDiagonals(this.tc, lines, c); this.tc.commit('Rectangle 3 points centre'); }
     this.pts = [];
   }
+  liveValue() {
+    if (!this.cursor) return null;
+    if (this.pts.length === 1) return this.fmtL(2 * dist(this.pts[0], this.cursor));
+    if (this.pts.length === 2) {
+      const [c, a] = this.pts;
+      return this.fmtWH(2 * dist(a, c), 2 * dot(sub(this.cursor, c), perp(norm(sub(a, c)))));
+    }
+    return null;
+  }
   preview(d) {
     if (!this.cursor) return;
     if (this.pts.length === 1) { d.guide(this.pts[0], this.cursor); d.point(this.pts[0]); }
@@ -152,6 +178,12 @@ export class ParallelogramTool extends Tool {
     if (this.tooClose(b, p) || this.tooClose(a, p)) { this.rejectLast(); return; }
     if (buildQuad(this.tc, this.corners(a, b, p), parallelogramRel)) this.tc.commit('Parallélogramme');
     this.pts = [];
+  }
+  liveValue() {
+    if (!this.cursor) return null;
+    if (this.pts.length === 1) return this.fmtL(dist(this.pts[0], this.cursor));
+    if (this.pts.length === 2) return this.fmtWH(dist(this.pts[0], this.pts[1]), dist(this.pts[1], this.cursor));
+    return null;
   }
   preview(d) {
     if (!this.cursor) return;

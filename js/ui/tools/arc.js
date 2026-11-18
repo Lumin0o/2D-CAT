@@ -33,6 +33,12 @@ export class ArcCenterTool extends Tool {
     this.tc.commit('Arc');
     this.pts = []; this.sweep = 0; this.lastTheta = null;
   }
+  liveValue() {
+    if (!this.cursor) return null;
+    if (this.pts.length === 1) return 'R ' + this.fmtL(dist(this.pts[0], this.cursor));
+    if (this.pts.length === 2) return `R ${this.fmtL(dist(this.pts[0], this.pts[1]))} · ${this.fmtA(this.sweep)}`;
+    return null;
+  }
   preview(d) {
     if (!this.cursor) return;
     if (this.pts.length === 1) { d.guide(this.pts[0], this.cursor); d.circle(this.pts[0], dist(this.pts[0], this.cursor), true); d.point(this.pts[0]); }
@@ -68,6 +74,15 @@ export class Arc3Tool extends Tool {
     this.autoTangentArc(sk.addArc(cp.id, sp.id, ep.id, ccw));
     this.tc.commit('Arc 3 points');
     this.pts = [];
+  }
+  liveValue() {
+    if (!this.cursor) return null;
+    if (this.pts.length === 1) return this.fmtL(dist(this.pts[0], this.cursor));
+    if (this.pts.length === 2) {
+      const res = circleFrom3(this.pts[0], this.pts[1], this.cursor);
+      return res ? 'R ' + this.fmtL(res.r) : null;
+    }
+    return null;
   }
   preview(d) {
     if (!this.cursor) return;
@@ -121,6 +136,11 @@ export class ArcTangentTool extends Tool {
     if (this.fromEntity) sk.addConstraint('tangent', [arc.id, this.fromEntity.id]);
     this.tc.commit('Arc tangent');
     this.pts = []; this.tangent = null; this.fromEntity = null;
+  }
+  liveValue() {
+    if (this.pts.length !== 1 || !this.cursor) return null;
+    const res = this.compute(this.pts[0], this.cursor);
+    return res ? 'R ' + this.fmtL(res.r) : null;
   }
   preview(d) {
     if (this.pts.length !== 1 || !this.cursor) return;

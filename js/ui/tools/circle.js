@@ -16,6 +16,10 @@ export class CircleCenterTool extends Tool {
     this.tc.commit('Cercle');
     this.pts = [];
   }
+  liveValue() {
+    if (this.pts.length !== 1 || !this.cursor) return null;
+    return 'R ' + this.fmtL(dist(this.pts[0], this.cursor));
+  }
   preview(d) {
     if (this.pts.length === 1 && this.cursor) {
       const c = this.pts[0];
@@ -40,6 +44,11 @@ export class Circle3Tool extends Tool {
     for (const p of this.pts) if (p.pointId) sk.addConstraint('coincident', [p.pointId, circle.id]);
     this.tc.commit('Cercle 3 points');
     this.pts = [];
+  }
+  liveValue() {
+    if (this.pts.length !== 2 || !this.cursor) return null;
+    const res = circleFrom3(this.pts[0], this.pts[1], this.cursor);
+    return res ? 'R ' + this.fmtL(res.r) : null;
   }
   preview(d) {
     if (!this.cursor) return;

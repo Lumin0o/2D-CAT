@@ -7,6 +7,7 @@
 // Le contexte « tc » est fourni par l'application (esquisse, aimantation, historique, messages).
 import { dist, sub, perp, norm, dot } from '../../core/geom.js';
 import { endpointEntities, outwardTangentAt } from '../../core/query.js';
+import { fmtLengthShort, fmtAngle } from '../../core/units.js';
 
 const TANGENT_TOL = Math.cos(6 * Math.PI / 180);
 
@@ -74,6 +75,11 @@ export class Tool {
   }
   step() {}
   preview(/* d, st */) {}
+  /** Cote de ce qu'on est en train de tracer, affichée au-dessus de la loupe (texte), ou null. */
+  liveValue() { return null; }
+  fmtL(v) { return fmtLengthShort(v, this.tc.settings); }
+  fmtA(a) { return fmtAngle(Math.abs(a), this.tc.settings); }
+  fmtWH(w, h) { return `${this.fmtL(Math.abs(w))} × ${this.fmtL(Math.abs(h))}`; }
   hint() { return ''; }
   updateHint() {
     let h = this.hint();

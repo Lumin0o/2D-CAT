@@ -315,7 +315,7 @@ export class App {
     const t = this.tool;
     let loupe = null, dragMarker = null;
     if (this.touch && this.finger) {
-      if (t && t.cursor && !t.noLoupe) loupe = { finger: this.finger, world: t.cursor };
+      if (t && t.cursor && !t.noLoupe) loupe = { finger: this.finger, world: t.cursor, label: t.liveValue ? t.liveValue() : null };
       else if (this.drag && this.drag.active && this.drag.single) { const p = this.sketch.points.get(this.drag.single); if (p) loupe = { finger: this.finger, world: { x: p.x, y: p.y } }; }
     }
     if (this.drag && this.drag.active && this.drag.mergeWith) { const p = this.sketch.points.get(this.drag.mergeWith); if (p) dragMarker = { x: p.x, y: p.y, kind: 'point' }; }

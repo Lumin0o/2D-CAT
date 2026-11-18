@@ -358,6 +358,27 @@ export class Renderer {
     ctx.lineWidth = 2.5;
     ctx.strokeStyle = st.colors.loupeRing;
     ctx.stroke();
+    if (st.loupe.label) this.drawLoupeLabel(st.loupe.label, cx, cy, R, st.colors);
+  }
+
+  /** Cote de ce qu'on trace, dans un petit rectangle en haut de la loupe (en dessous si pas de place). */
+  drawLoupeLabel(label, cx, cy, R, C) {
+    const { ctx, vp } = this;
+    ctx.font = `600 14px ${FONT}`;
+    const w = Math.ceil(ctx.measureText(label).width) + 16, h = 24;
+    let y = cy - R - 2 - h / 2;                          // posé sur le haut du cercle
+    if (y - h / 2 < 4) y = cy + R + 2 + h / 2;           // trop près du bord haut : sous la loupe
+    const x = Math.max(w / 2 + 4, Math.min(vp.width - w / 2 - 4, cx));
+    ctx.beginPath();
+    roundRect(ctx, x - w / 2, y - h / 2, w, h, 7);
+    ctx.fillStyle = C.loupeRing;
+    ctx.fill();
+    ctx.fillStyle = C.canvasBg;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y + 0.5);
+    ctx.textAlign = 'start';
+    ctx.textBaseline = 'alphabetic';
   }
 
   /** Petit traceur passé aux outils pour leur aperçu. */

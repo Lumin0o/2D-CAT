@@ -1,5 +1,5 @@
 import { Tool } from './base.js';
-import { sub, mul, add, angleOf } from '../../core/geom.js';
+import { sub, mul, add, angleOf, dist } from '../../core/geom.js';
 
 /** Ligne par deux extrémités, avec enchaînement des segments. */
 export class LineTool extends Tool {
@@ -34,6 +34,10 @@ export class LineTool extends Tool {
     if (this.pts.length > 0) { this.pts = []; this.chain = 0; this.updateHint(); this.tc.requestDraw(); return true; }
     return false;
   }
+  liveValue() {
+    if (this.pts.length !== 1 || !this.cursor) return null;
+    return this.fmtL(dist(this.pts[0], this.tc.autoAlign(this.pts[0], this.cursor)));
+  }
   preview(d) {
     if (this.pts.length === 1 && this.cursor) {
       const end = this.tc.autoAlign(this.pts[0], this.cursor);
@@ -61,6 +65,10 @@ export class LineMidTool extends Tool {
     if (m.pointId) sk.addConstraint('midpoint', [m.pointId, line.id]);
     this.tc.commit('Ligne par le milieu');
     this.pts = [];
+  }
+  liveValue() {
+    if (this.pts.length !== 1 || !this.cursor) return null;
+    return this.fmtL(2 * dist(this.pts[0], this.tc.autoAlign(this.pts[0], this.cursor)));
   }
   preview(d) {
     if (this.pts.length === 1 && this.cursor) {

@@ -16,6 +16,11 @@ export class PointTool extends Tool {
     p.sketchPoint = true;
     this.tc.commit('Point');
   }
+  /** Position du point par rapport à l'origine. */
+  liveValue() {
+    if (!this.cursor) return null;
+    return `X ${this.fmtL(this.cursor.x)} · Y ${this.fmtL(this.cursor.y)}`;
+  }
   preview(d) {
     if (this.cursor) d.point(this.cursor);
   }
