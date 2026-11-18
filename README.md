@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.8.
+Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.9.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -99,14 +99,14 @@
 - **Cotation ordinale parallèle à une ligne** : si on touche une ligne inclinée comme référence (ou un point, puis une ligne), comme pour la cotation intelligente, l’endroit où glisse le doigt pour placer la cote 0 choisit des cotes horizontales (au-dessus / en dessous), verticales (à gauche / à droite) , parallèles à la ligne (à côté d’elle, ou dans les coins situés à côté d’elle ; distances mesurées le long de la ligne) ou perpendiculaires à la ligne (dans les coins situés dans son prolongement, au-delà de ses bouts).
 - Bandeau d'infos : le type de l'élément sélectionné est indiqué (ligne, ligne de construction, ligne infinie, cercle, arc, point, centre, point d'esquisse, origine, type de cote) ; pour plusieurs éléments, le détail (« 2 lignes · 1 cercle »).
 
-## Retours iPhone intégrés (0.3.6 – 0.3.8)
+## Retours iPhone intégrés (0.3.6 – 0.3.9)
 
 - Fenêtre Aimantation : l'interrupteur « Grille » n'est plus grisé quand la grille est masquée.
 - **Bouton Affichage (œil)**, sous le bouton plein écran : un interrupteur par type d'élément (lignes, cercles, arcs, construction, points, cotes, relations, axes et origine), plus « Tout afficher » et « Tout masquer ». Un élément masqué n'est ni dessiné, ni sélectionnable, ni aimanté (ses relations agissent toujours). Seul le type coupé est masqué (0.3.7) : une ligne masquée garde ses points, ses cotes et ses relations à l'écran. L'œil est barré et en couleur tant que quelque chose est masqué. Réglage gardé.
 - Bandeau d'infos sur plusieurs lignes : il grandit vers le haut par-dessus le dessin, les boutons du dessin remontent avec lui ; la zone de dessin ne bouge plus.
 - Plusieurs éléments sélectionnés : la phrase « Choisissez une relation ci-dessus » est retirée.
 - Aperçus des modifications (Symétrie, Décaler, Déplacer, Copier) en jaune #FFFF00 (0.3.7).
-- Thème clair légèrement assombri (fond du dessin #E9E9EC, bandeaux #F0F0F3 au lieu du blanc pur) (0.3.8).
+- Thème clair légèrement assombri (au lieu du blanc pur) (0.3.8) ; fond du dessin #E8E8F0, bandeaux #F1F1F7, fond général #DCDCE6 (0.3.9).
 
 ## Tester sur ordinateur
 
