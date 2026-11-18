@@ -1,5 +1,5 @@
 // Service worker : met en cache tous les fichiers de l'app (aucune ressource externe).
-const CACHE = 'esquisse2d-v0.2.8';
+const CACHE = 'esquisse2d-v0.3.0';
 const ASSETS = [
   './',
   './index.html',
@@ -15,6 +15,7 @@ const ASSETS = [
   './js/core/solver.js',
   './js/core/units.js',
   './js/core/calc.js',
+  './js/core/edit.js',
   './js/render/viewport.js',
   './js/render/renderer.js',
   './js/render/annotations.js',
@@ -38,6 +39,7 @@ const ASSETS = [
   './js/ui/tools/circle.js',
   './js/ui/tools/arc.js',
   './js/ui/tools/point.js',
+  './js/ui/tools/modify.js',
   './js/ui/tools/dimension.js',
   './icons/icon-192.png',
   './icons/icon-512.png',

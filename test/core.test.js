@@ -233,6 +233,7 @@ ok(fmtLength(25.4 * 63.5, { unit: 'ft' }) === "5' 3 1/2\"", 'pieds: ' + fmtLengt
 }
 
 // ---- Registre ----
-ok(GROUPS.length === 12 && describeFavorite('line').kind === 'group' && describeFavorite('tool:line2').kind === 'tool' && describeFavorite('xxx') === null, 'registre des groupes');
+ok(GROUPS.length === 13 && describeFavorite('line').kind === 'group' && describeFavorite('tool:line2').kind === 'tool' && describeFavorite('xxx') === null, 'registre des groupes');
 
 print(fails === 0 ? '\nTOUS LES TESTS PASSENT' : `\n${fails} ÉCHEC(S)`);
+if (fails) throw new Error('tests en échec');

@@ -24,7 +24,7 @@ export class InfoBar {
     const colors = this.app.colors();
     const S = settings.data;
     let main = '', extra = '', editable = false, muted = false;
-    if (this.app.measureText) { main = this.app.measureText; }
+    if (this.app.measureText) { main = this.app.measureText; extra = this.app.measureExtra || ''; }
     else if (selection.size === 0) { main = 'Aucune sélection'; muted = true; }
     else if (selection.size > 1) { main = `${selection.size} éléments`; extra = 'Choisissez une relation ci-dessus'; }
     else {

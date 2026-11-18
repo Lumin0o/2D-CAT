@@ -113,6 +113,27 @@ export function buildSystem(sk) {
       case 'perpendicular': if (isLine(A) && isLine(B)) add(k.id, [A.p1, A.p2, B.p1, B.p2], [], () => cosAng(A, B)); break;
       case 'tangent': {
         const L = isLine(A) ? A : isLine(B) ? B : null;
+        // Point de contact partagé (arc qui part du bout de l'entité) : on écrit « rayon ⟂ tangente »
+        // au point de contact. La forme « distance au centre = rayon » y est dégénérée (maximum),
+        // et l'analyse la verrait à tort comme redondante.
+        const endsOf = (e) => (e.type === 'line' ? [e.p1, e.p2] : e.type === 'arc' ? [e.s, e.e] : []);
+        const T = A && B ? endsOf(A).find((p) => endsOf(B).includes(p)) : null;
+        if (T && L) {
+          const Cv = L === A ? B : A;
+          if (!isCurve(Cv)) break;
+          add(k.id, [L.p1, L.p2, Cv.c, T], [], () => {
+            const ux = X(L.p2) - X(L.p1), uy = Y(L.p2) - Y(L.p1);
+            return ((X(Cv.c) - X(T)) * ux + (Y(Cv.c) - Y(T)) * uy) / (Math.hypot(ux, uy) || 1);
+          });
+          break;
+        }
+        if (T && isCurve(A) && isCurve(B)) {
+          add(k.id, [A.c, B.c, T], [], () => {
+            const ax = X(A.c) - X(T), ay = Y(A.c) - Y(T), bx = X(B.c) - X(T), by = Y(B.c) - Y(T);
+            return (ax * by - ay * bx) / ((Math.hypot(ax, ay) || 1) * (Math.hypot(bx, by) || 1)) * Math.hypot(bx, by);
+          });
+          break;
+        }
         if (L) {
           const Cv = isCurve(A) ? A : isCurve(B) ? B : null;
           if (!Cv) break;

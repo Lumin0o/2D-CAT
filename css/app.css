@@ -422,6 +422,31 @@ button.row { width: 100%; text-align: left; }
 .rel-chip:active { filter: brightness(.9); }
 .rel-chip.dim .glyph { background: var(--accent); width: auto; min-width: 20px; padding: 0 4px; }
 .round-btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+#btn-box.on { background: var(--green); border-color: var(--green); }
+.relbar { right: 56px; }
+
+/* Actions de l'outil en cours (Valider, Garder l'original…) sous l'indication */
+.toolacts {
+  position: absolute; top: 48px; left: 8px; right: 8px;
+  display: flex; justify-content: center; flex-wrap: wrap; gap: 6px;
+  pointer-events: none;
+}
+.toolacts .rel-chip { pointer-events: auto; }
+.rel-chip.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.rel-chip.on .glyph { background: var(--accent); }
+.rel-chip.off .glyph { background: var(--surface2); color: var(--text2); }
+
+/* Plein écran : bouton discret en haut à droite */
+.round-btn.small { width: 36px; height: 36px; }
+.round-btn.small svg { width: 18px; height: 18px; }
+.full-btn { position: absolute; top: 10px; right: 10px; z-index: 6; }
+.hint { max-width: calc(100% - 110px); }
+.app.fullscreen .toolbar,
+.app.fullscreen .toolbar-expanded,
+.app.fullscreen .footer,
+.app.fullscreen .overlay,
+.app.fullscreen .relbar { display: none !important; }
+.app.fullscreen .full-btn { opacity: .55; box-shadow: none; }
 
 /* ===== Clavier calculatrice ===== */
 .keypad { position: absolute; inset: 0; z-index: 70; }

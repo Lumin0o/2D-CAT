@@ -190,3 +190,4 @@ function rect(sk, x0, y0, x1, y1, originCorner = false) {
 }
 
 print(fails === 0 ? '\nTOUS LES TESTS PASSENT' : `\n${fails} ÉCHEC(S)`);
+if (fails) throw new Error('tests en échec');

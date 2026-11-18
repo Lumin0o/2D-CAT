@@ -52,6 +52,8 @@ export const ICONS = {
   open: S(`<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2H6l-3 9z"/>`),
   import: S(`<path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v3h16v-3"/>`),
   export: S(`<path d="M12 15V3M8 7l4-4 4 4"/><path d="M4 17v3h16v-3"/>`),
+  boxSelect: S(`<rect x="3" y="4" width="13" height="10" rx="1" stroke-dasharray="3 2.4"/><path d="m14 12 7 3-3 1.2-1.2 3z" fill="currentColor"/>`),
+  fullscreenExit: S(`<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>`),
   image: S(`<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 8"/>`),
   pdf: S(`<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M8 17v-5h2a1.5 1.5 0 0 1 0 3H8"/>`),
 };

@@ -1,9 +1,13 @@
 // Registre des groupes d'outils (comme SOLIDWORKS) et des classes d'outils.
-import { LineTool, LineMidTool } from './line.js';
+import { LineTool, LineMidTool, ConstructionLineTool } from './line.js';
 import { Rect2Tool, RectCenterTool, Rect3CornerTool, Rect3CenterTool, ParallelogramTool } from './rect.js';
 import { CircleCenterTool, Circle3Tool } from './circle.js';
 import { ArcCenterTool, Arc3Tool, ArcTangentTool } from './arc.js';
 import { PointTool } from './point.js';
+import {
+  ToggleConstructionTool, MeasureTool, TrimTool, ExtendTool, OffsetTool, MirrorTool,
+  FilletTool, ChamferTool, MoveTool, CopyTool, RotateTool,
+} from './modify.js';
 import { DimensionTool, DimHorizontalTool, DimVerticalTool, DimChainTool, DimOrdinateTool } from './dimension.js';
 
 export const GROUPS = [
@@ -31,8 +35,8 @@ export const GROUPS = [
     { id: 'point', label: 'Point', sub: 'Point d\'esquisse isolé', icon: 'point' },
   ] },
   { id: 'construction', label: 'Construction', tools: [
-    { id: 'constructionLine', label: 'Ligne de construction', icon: 'construction', stage: 3 },
-    { id: 'toggleConstruction', label: 'Basculer en construction', icon: 'constructionToggle', stage: 3 },
+    { id: 'constructionLine', label: 'Ligne de construction', icon: 'construction' },
+    { id: 'toggleConstruction', label: 'Basculer en construction', icon: 'constructionToggle' },
   ] },
   { id: 'dimension', label: 'Cotation', tools: [
     { id: 'smartDimension', label: 'Cotation intelligente', icon: 'dimension' },
@@ -42,26 +46,26 @@ export const GROUPS = [
     { id: 'dimOrdinate', label: 'Cotation ordinale', sub: 'Toutes les cotes depuis une même référence (0)', icon: 'dimOrd' },
   ] },
   { id: 'measure', label: 'Mètre', tools: [
-    { id: 'measure', label: 'Mètre', sub: 'Mesure sans créer de cote', icon: 'measure', stage: 3 },
+    { id: 'measure', label: 'Mètre', sub: 'Mesure sans créer de cote', icon: 'measure' },
   ] },
   { id: 'trim', label: 'Ajuster', tools: [
-    { id: 'trim', label: 'Ajuster intelligent', icon: 'trim', stage: 3 },
-    { id: 'extend', label: 'Prolonger', icon: 'extend', stage: 3 },
+    { id: 'trim', label: 'Ajuster intelligent', icon: 'trim' },
+    { id: 'extend', label: 'Prolonger', icon: 'extend' },
   ] },
   { id: 'offset', label: 'Décaler', tools: [
-    { id: 'offset', label: 'Décaler les entités', icon: 'offset', stage: 3 },
+    { id: 'offset', label: 'Décaler les entités', icon: 'offset' },
   ] },
   { id: 'mirror', label: 'Miroir', tools: [
-    { id: 'mirror', label: 'Miroir', sub: 'Par rapport à une ligne', icon: 'mirror', stage: 3 },
+    { id: 'mirror', label: 'Miroir', sub: 'Par rapport à une ligne', icon: 'mirror' },
   ] },
   { id: 'fillet', label: 'Congé', tools: [
-    { id: 'fillet', label: 'Congé d\'esquisse', icon: 'fillet', stage: 3 },
-    { id: 'chamfer', label: 'Chanfrein d\'esquisse', icon: 'chamfer', stage: 3 },
+    { id: 'fillet', label: 'Congé d\'esquisse', icon: 'fillet' },
+    { id: 'chamfer', label: 'Chanfrein d\'esquisse', icon: 'chamfer' },
   ] },
   { id: 'move', label: 'Déplacer', tools: [
-    { id: 'move', label: 'Déplacer', icon: 'move', stage: 3 },
-    { id: 'copy', label: 'Copier', icon: 'copy', stage: 3 },
-    { id: 'rotate', label: 'Pivoter', icon: 'rotate', stage: 3 },
+    { id: 'move', label: 'Déplacer', icon: 'move' },
+    { id: 'copy', label: 'Copier', icon: 'copy' },
+    { id: 'rotate', label: 'Pivoter', icon: 'rotate' },
   ] },
 ];
 
@@ -84,6 +88,18 @@ export const TOOL_CLASSES = {
   dimVertical: DimVerticalTool,
   dimChain: DimChainTool,
   dimOrdinate: DimOrdinateTool,
+  constructionLine: ConstructionLineTool,
+  toggleConstruction: ToggleConstructionTool,
+  measure: MeasureTool,
+  trim: TrimTool,
+  extend: ExtendTool,
+  offset: OffsetTool,
+  mirror: MirrorTool,
+  fillet: FilletTool,
+  chamfer: ChamferTool,
+  move: MoveTool,
+  copy: CopyTool,
+  rotate: RotateTool,
 };
 
 const toolIndex = new Map();

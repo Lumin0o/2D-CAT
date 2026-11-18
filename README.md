@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.8.
+Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.0.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -52,6 +52,22 @@
 
 - Le rectangle de cote est à cheval sur le haut de la loupe (sur le bas si la loupe touche le haut de l'écran).
 - Point d'esquisse : dessiné en astérisque, de la taille des extrémités ; même forme pour l'aperçu et l'icône de l'outil.
+
+## Étape 3 : outils complémentaires (0.3.0)
+
+- **Ligne de construction** : comme la ligne, en pointillés (repère, non exportée à l'étape 4). **Basculer en construction** : toucher une entité la fait passer de trait normal à construction et inversement ; si des entités sont sélectionnées avant de choisir l'outil, elles basculent toutes.
+- **Mètre** : deux points (aimantés) → distance, ΔX, ΔY et angle dans le bandeau ; une entité → longueur, rayon, diamètre, angle, longueur d'arc. Rien n'est ajouté à l'esquisse. Pendant le choix du deuxième point, la loupe affiche la distance.
+- **Ajuster intelligent** : toucher une portion la supprime jusqu'aux intersections voisines (toute l'entité si elle n'en a pas ; un cercle demande deux intersections). Balayer le doigt à travers plusieurs entités les ajuste toutes, en un seul « annuler ». Les nouvelles extrémités sont coïncidentes avec l'entité qui coupe ; une ligne coupée au milieu donne deux morceaux colinéaires.
+- **Prolonger** : toucher une ligne ou un arc près du bout à prolonger ; il va jusqu'à la première entité rencontrée (bout libre seulement).
+- **Décaler** : toucher le contour (les entités reliées bout à bout sont prises ensemble), puis le côté ; l'aperçu suit le doigt et la distance se saisit au clavier. Coins raccordés, lignes parallèles à l'original, arcs concentriques.
+- **Miroir** : toucher les éléments à copier, Valider, puis toucher la ligne de symétrie. Les points sur l'axe sont partagés, les autres reçoivent une relation de symétrie (la copie suit l'original).
+- **Congé** / **Chanfrein** : toucher un coin (point qui relie deux lignes) ou deux lignes, puis le rayon / la distance au clavier. Avec une sélection (par ex. un rectangle encadré), tous ses coins sont traités d'un coup. Congé tangent aux deux lignes.
+- **Déplacer** / **Copier** : sélection (ou toucher les éléments puis Valider), point de départ puis point d'arrivée (aimantés), avec aperçu. Les liens avec le reste de l'esquisse sont retirés (comme SOLIDWORKS sans « garder les relations »). Copier reste actif pour d'autres copies.
+- **Pivoter** : sélection, centre de rotation, puis l'angle au clavier (positif = sens inverse des aiguilles d'une montre). Relations H / V échangées pour un quart de tour, retirées pour un angle quelconque.
+- **Sélection** : bouton **cadre** à côté de la sélection multiple. Cadre vers la droite = fenêtre bleue (éléments entièrement dedans), vers la gauche = capture verte pointillée (éléments touchés) ; il prend aussi les cotes et les points isolés, et s'ajoute à la sélection. Sans mode actif (ni multiple, ni cadre) : sélection simple, et glisser un doigt dans le vide déplace la vue ; en sélection multiple aussi.
+- **Plein écran** : petit bouton en haut à droite du dessin ; masque la barre d'outils, le bandeau et les boutons. Le même bouton, discret, permet d'en sortir.
+- Correction du solveur : la tangence d'un arc qui part du bout d'une ligne (arc tangent, congé) était jugée redondante et pouvait disparaître ; elle s'écrit maintenant « rayon perpendiculaire à la ligne » au point de contact.
+- Les calculs (ajuster, prolonger, décaler, miroir, congé, chanfrein, transformations) sont dans `js/core/edit.js`, testés dans `test/edit.test.js`. Toute opération qui rendrait l'esquisse impossible à résoudre est annulée avec un message.
 
 ## Tester sur ordinateur
 

@@ -35,7 +35,8 @@ export class App {
     const $ = (id) => document.getElementById(id);
     this.els = {
       app: $('app'), canvasWrap: $('canvas-wrap'), canvas: $('canvas'), hint: $('hint'),
-      undo: $('btn-undo'), redo: $('btn-redo'), fit: $('btn-fit'), multi: $('btn-multi'),
+      undo: $('btn-undo'), redo: $('btn-redo'), fit: $('btn-fit'), multi: $('btn-multi'), box: $('btn-box'),
+      full: $('btn-full'), toolacts: $('toolacts'),
       snap: $('btn-snap'), grid: $('btn-grid'), files: $('btn-files'), settings: $('btn-settings'),
       popoverLayer: $('popover-layer'), settingsPanel: $('settings-panel'),
     };
@@ -52,7 +53,9 @@ export class App {
     this.box = null;
     this.message = null;
     this.errorIds = null;
-    this.multi = false;
+    this.selMode = null;      // null : sélection simple + déplacement à un doigt ; 'multi' : taps cumulés ; 'box' : cadre
+    this.measureText = null;  // résultat de l'outil Mètre (bandeau d'infos)
+    this.measureExtra = '';
     this.touch = false;
     this.finger = null;
     this._pendingSel = [];
@@ -96,6 +99,8 @@ export class App {
     this.els.redo.innerHTML = icon('redo');
     this.els.fit.innerHTML = icon('fit');
     this.els.multi.innerHTML = icon('multi');
+    this.els.box.innerHTML = icon('boxSelect');
+    this.els.full.innerHTML = icon('fullscreen');
     this.els.snap.querySelector('.bb-icon').innerHTML = icon('magnet');
     this.els.grid.querySelector('.bb-icon').innerHTML = icon('grid');
     this.els.files.querySelector('.bb-icon').innerHTML = icon('folder');
@@ -104,7 +109,9 @@ export class App {
     click(this.els.undo, () => this.undo());
     click(this.els.redo, () => this.redo());
     click(this.els.fit, () => this.fitAll());
-    click(this.els.multi, () => this.setMulti(!this.multi));
+    click(this.els.multi, () => this.setSelMode(this.selMode === 'multi' ? null : 'multi'));
+    click(this.els.box, () => this.setSelMode(this.selMode === 'box' ? null : 'box'));
+    click(this.els.full, () => this.setFullscreen(!this.fullscreen));
     click(this.els.snap, () => openSnapPopover(this, this.els.snap));
     click(this.els.grid, () => { const on = !this.settings.get('grid'); this.settings.set('grid', on); showToast(on ? 'Grille affichée' : 'Grille masquée'); });
     this.updateGridButton();
@@ -179,8 +186,23 @@ export class App {
       toast: (m) => showToast(m),
       deactivate: () => self.setTool(null),
       hitGeometry: (wp) => hitTest(self.sketch, wp, self.vp.pxToWorld(HIT_PX)),
+      /** Entité la plus proche (sans priorité aux points), ou null. */
+      hitEntity: (wp) => {
+        const tol = self.vp.pxToWorld(HIT_PX);
+        let best = null;
+        for (const e of self.sketch.entities.values()) { const d = entityDistance(self.sketch, e, wp); if (d <= tol && (!best || d < best.d)) best = { d, id: e.id }; }
+        return best ? best.id : null;
+      },
       createDimension: (k, label) => self.createDimension(k, label),
       takeSelection: () => { const ids = self._pendingSel; self._pendingSel = []; return ids; },
+      // ---- étape 3 ----
+      refreshUI: () => self.refreshUI(),
+      applyEdit: (label, fn) => self.applyEdit(label, fn),
+      setMeasure: (text, extra = '') => { self.measureText = text; self.measureExtra = extra; self.infobar.update(); },
+      lengthKeypad: (title, mm, cb, opts) => self.lengthKeypad(title, mm, cb, opts),
+      signedAngleKeypad: (title, rad, cb) => self.signedAngleKeypad(title, rad, cb),
+      pxToWorld: (px) => self.vp.pxToWorld(px),
+      keypadOpen: () => self.keypad.isOpen(),
       endpointTangent: (pid) => {
         const es = endpointEntities(self.sketch, pid);
         if (!es.length) return null;
@@ -340,6 +362,7 @@ export class App {
   refreshUI() {
     this.infobar.update();
     this.relbar.update();
+    this.updateToolActions();
     this.requestDraw();
   }
 
@@ -421,6 +444,7 @@ export class App {
   setTool(id) {
     if (this.tool) this.tool.onCancel();
     this.tool = null; this.toolId = null;
+    this.measureText = null; this.measureExtra = '';
     if (id) {
       const Cls = TOOL_CLASSES[id];
       if (!Cls) { this.toolbar.setActive(null); this.setHint(''); return; }
@@ -459,10 +483,46 @@ export class App {
     this.els.hint.textContent = text || '';
     this.els.hint.hidden = !text;
   }
-  setMulti(on) {
-    this.multi = on;
-    this.els.multi.classList.toggle('on', on);
-    showToast(on ? 'Sélection multiple activée' : 'Sélection simple');
+  /**
+   * Modes de sélection (exclusifs) : 'multi' (chaque tap ajoute ou retire), 'box' (glisser dans le vide trace
+   * un cadre : vers la droite = fenêtre bleue, éléments entièrement dedans ; vers la gauche = capture verte
+   * pointillée, éléments touchés), ou aucun : sélection simple, et glisser dans le vide déplace la vue.
+   */
+  setSelMode(mode) {
+    this.selMode = mode;
+    this.els.multi.classList.toggle('on', mode === 'multi');
+    this.els.box.classList.toggle('on', mode === 'box');
+    this.els.multi.setAttribute('aria-pressed', String(mode === 'multi'));
+    this.els.box.setAttribute('aria-pressed', String(mode === 'box'));
+    showToast(mode === 'multi' ? 'Sélection multiple : chaque toucher ajoute ou retire'
+      : mode === 'box' ? 'Sélection par cadre : glissez vers la droite (fenêtre) ou vers la gauche (capture)'
+      : 'Sélection simple · glisser dans le vide déplace la vue', { ms: 2400 });
+  }
+  get multi() { return this.selMode !== null; }
+  setMulti(on) { this.setSelMode(on ? 'multi' : null); }
+  /** Plein écran : barre d'outils, bandeau et boutons masqués ; le petit bouton du coin en sort. */
+  setFullscreen(on) {
+    this.fullscreen = on;
+    this.els.app.classList.toggle('fullscreen', on);
+    this.els.full.innerHTML = icon(on ? 'fullscreenExit' : 'fullscreen');
+    this.els.full.setAttribute('aria-label', on ? 'Quitter le plein écran' : 'Plein écran');
+    this.popovers.close();
+    if (on && this.toolbar.expanded) this.toolbar.setExpanded(false);
+    setTimeout(() => this.onResize(), 30);
+  }
+  /** Boutons d'action de l'outil en cours (sous l'indication). */
+  updateToolActions() {
+    const el = this.els.toolacts;
+    const acts = this.tool && this.tool.actions ? this.tool.actions() : [];
+    el.innerHTML = '';
+    el.hidden = !acts.length;
+    for (const a of acts) {
+      const b = document.createElement('button');
+      b.className = 'rel-chip ' + (a.cls || '');
+      b.innerHTML = (a.glyph ? `<span class="glyph">${a.glyph}</span>` : '') + a.label;
+      b.addEventListener('click', (e) => { e.preventDefault(); a.run(); this.refreshUI(); });
+      el.appendChild(b);
+    }
   }
 
   // ---------- Test de toucher (mode sélection) ----------
@@ -495,7 +555,7 @@ export class App {
     this.finger = s;
     const wp = this.vp.toWorld(s);
     if (this.tool) { this.tool.onPress(wp); return; }
-    this.drag = { hit: this.hitAt(s, wp), startS: s, startW: wp, active: false };
+    this.drag = { hit: this.hitAt(s, wp), startS: s, startW: wp, lastS: s, active: false };
   }
   onMove(s) {
     this.finger = s;
@@ -510,13 +570,18 @@ export class App {
       if (d.hit) this.beginDrag(d);
     }
     if (d.hit) this.applyDrag(d, wp);
-    else {
+    else if (this.selMode !== 'box') {
+      // déplacement de la vue à un doigt
+      this.vp.pan(s.x - d.lastS.x, s.y - d.lastS.y);
+      d.panned = true;
+    } else {
       this.box = {
         minX: Math.min(d.startW.x, wp.x), maxX: Math.max(d.startW.x, wp.x),
         minY: Math.min(d.startW.y, wp.y), maxY: Math.max(d.startW.y, wp.y),
         crossing: s.x < d.startS.x,
       };
     }
+    d.lastS = s;
     this.requestDraw();
   }
   onEnd(s, info) {
@@ -531,6 +596,7 @@ export class App {
     if (d.active) {
       if (d.hit) this.endDrag(d);
       else if (this.box) this.finishBox(this.box);
+      else if (d.panned) this.scheduleSave();
     } else if (!info.cancelled) this.tapSelect(d.hit, info);
     this.box = null;
     this.refreshUI();
@@ -638,11 +704,28 @@ export class App {
     this.selection.clear();
     this.selection.add(hit.id);
   }
+  /** Cadre : ajoute à la sélection les entités, les points isolés et les cotes (fenêtre : entièrement dedans ; capture : touchés). */
   finishBox(box) {
-    this.selection.clear();
-    for (const e of this.sketch.entities.values()) {
-      const ok = box.crossing ? entityTouchesRect(this.sketch, e, box) : entityInsideRect(this.sketch, e, box);
+    const sk = this.sketch;
+    const inBox = (p) => p.x >= box.minX && p.x <= box.maxX && p.y >= box.minY && p.y <= box.maxY;
+    for (const e of sk.entities.values()) {
+      const ok = box.crossing ? entityTouchesRect(sk, e, box) : entityInsideRect(sk, e, box);
       if (ok) this.selection.add(e.id);
+    }
+    for (const p of sk.points.values()) if (p.sketchPoint && inBox(p)) this.selection.add(p.id);
+    // cotes : par leur texte (rectangle écran ramené en monde)
+    const a = this.vp.toScreen({ x: box.minX, y: box.maxY }), b = this.vp.toScreen({ x: box.maxX, y: box.minY });
+    for (const k of sk.constraints.values()) {
+      if (!isAnnotation(k)) continue;
+      const lay = dimLayout(sk, k);
+      if (!lay) continue;
+      const label = dimLabel(sk, k, this.settings.data);
+      const t = this.renderer.dimTextCenter(lay, label);
+      const size = this.renderer.dimTextSize(label);
+      const [hw, hh] = lay.rot ? [size.h / 2, size.w / 2] : [size.w / 2, size.h / 2];
+      const inside = t.x - hw >= a.x && t.x + hw <= b.x && t.y - hh >= a.y && t.y + hh <= b.y;
+      const touch = t.x + hw >= a.x && t.x - hw <= b.x && t.y + hh >= a.y && t.y - hh <= b.y;
+      if (box.crossing ? touch : inside) this.selection.add(k.id);
     }
   }
   deleteSelection() {
@@ -719,6 +802,39 @@ export class App {
       validate: (v) => (flippable ? (Math.abs(v) > 1e-12 ? null : 'La valeur ne peut pas être nulle') : (v > 0 ? null : 'La valeur doit être positive')),
       onSubmit: (v, o = {}) => onValue(fromDisplay(Math.abs(v), unit), !!o.flip !== (v < 0)),
     });
+  }
+  /** Angle signé (rotation) : positif = sens trigonométrique, non nul. */
+  signedAngleKeypad(title, rad, onValue) {
+    const deg = this.settings.get('angleUnit') !== 'rad';
+    this.keypad.open({
+      title, unit: deg ? '°' : 'rad', initial: fmtNumber(deg ? rad * 180 / Math.PI : rad, 4),
+      validate: (v) => (Math.abs(v) > 1e-9 ? null : 'L\'angle ne peut pas être nul'),
+      onSubmit: (v) => onValue(deg ? v * Math.PI / 180 : v),
+    });
+  }
+  /**
+   * Opération d'édition (outils de l'étape 3) : fn modifie l'esquisse et renvoie { ok, msg?, weights? }.
+   * En cas d'échec (ou si le solveur n'y arrive pas), l'esquisse revient à l'état d'avant.
+   */
+  applyEdit(label, fn) {
+    const before = this.sketch.serialize();
+    let res;
+    try { res = fn(this.sketch) || { ok: true }; } catch (err) { console.warn(err); res = { ok: false, msg: 'Opération impossible' }; }
+    const revert = (msg) => {
+      this.sketch = Sketch.deserialize(before);
+      this.afterChange();
+      if (msg) showToast(msg, { error: true, ms: 2600 });
+    };
+    if (!res.ok) { revert(res.msg); return res; }
+    const sk = this.sketch;
+    sk.cleanupDegenerate();
+    const start = this.capturePositions();
+    let s = solve(sk, { weights: res.weights || new Map() });
+    if (!s.ok) { this.restorePositions(start); s = solve(sk); }
+    if (!s.ok) { revert('Opération impossible : trop de contraintes'); return { ok: false }; }
+    this.selection.clear();
+    this.commit(label, { auto: true });
+    return res;
   }
   angleKeypad(title, rad, onValue) {
     const deg = this.settings.get('angleUnit') !== 'rad';

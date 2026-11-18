@@ -3,6 +3,8 @@ import { sub, mul, add, angleOf, dist } from '../../core/geom.js';
 
 /** Ligne par deux extrémités, avec enchaînement des segments. */
 export class LineTool extends Tool {
+  /** Ligne de construction (pointillés, non exportée) : voir ConstructionLineTool. */
+  get construction() { return false; }
   reset() { this.chain = 0; super.reset(); }
   hint() {
     if (this.pts.length === 0) return 'Touchez le premier point';
@@ -22,10 +24,10 @@ export class LineTool extends Tool {
     const p1 = this.tc.resolvePoint(a);
     const p2 = this.tc.resolvePoint(end);
     if (p1.id === p2.id) { this.pts = [a]; return; }
-    const line = sk.addLine(p1.id, p2.id);
+    const line = sk.addLine(p1.id, p2.id, { construction: this.construction });
     if (end.align === 'h') sk.addConstraint('horizontal', [line.id]);
     if (end.align === 'v') sk.addConstraint('vertical', [line.id]);
-    this.tc.commit('Ligne');
+    this.tc.commit(this.construction ? 'Ligne de construction' : 'Ligne');
     if (this.dragged) { this.pts = []; this.chain = 0; return; }   // glisser-lâcher : un seul segment
     this.chain++;
     this.pts = [{ x: p2.x, y: p2.y, pointId: p2.id, kind: 'point' }];
@@ -41,10 +43,15 @@ export class LineTool extends Tool {
   preview(d) {
     if (this.pts.length === 1 && this.cursor) {
       const end = this.tc.autoAlign(this.pts[0], this.cursor);
-      d.line(this.pts[0], end);
+      d.line(this.pts[0], end, this.construction);
       d.point(this.pts[0]);
     }
   }
+}
+
+/** Ligne de construction : comme la ligne, en pointillés ; elle sert de repère et n'est pas exportée. */
+export class ConstructionLineTool extends LineTool {
+  get construction() { return true; }
 }
 
 /** Ligne par le milieu : premier point = milieu, deuxième = une extrémité. */
