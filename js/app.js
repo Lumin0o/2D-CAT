@@ -329,7 +329,7 @@ export class App {
       under: c.under, full: c.full, over: c.over,
       selected: dark ? '#ffb340' : '#ff8a00',
       preview: dark ? '#9ad0ff' : '#1f6fe5',
-      ghost: dark ? '#ffd60a' : '#d9a300',      // aperçu jaune des modifications (miroir, décaler, copier…)
+      ghost: '#ffff00',                         // aperçu jaune des modifications (symétrie, décaler, copier…)
       guide: dark ? '#8a8a90' : '#9a9aa0',
       snap: dark ? '#ffd60a' : '#c98a00',
       origin: dark ? '#ff6b5e' : '#d8392b',
