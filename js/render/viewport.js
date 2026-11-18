@@ -34,6 +34,7 @@ export class Viewport {
     const availW = Math.max(this.width - 2 * pad, 20);
     const availH = Math.max(this.height - 2 * pad, 20);
     let s = Math.min(availW / w, availH / h);
+    if (w <= 1e-6 && h <= 1e-6) s = 4;     // un seul point : échelle par défaut, centrée dessus
     s = Math.min(this.maxScale, Math.max(this.minScale, s));
     this.scale = s;
     const cx = (bbox.minX + bbox.maxX) / 2, cy = (bbox.minY + bbox.maxY) / 2;

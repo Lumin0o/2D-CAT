@@ -397,7 +397,7 @@ export function analyze(sk) {
     entities.set(e.id, inConflict ? 'over' : full ? 'full' : 'under');
   }
   let state = 'empty';
-  if (sk.entities.size > 0) {
+  if (!sk.isEmpty()) {
     if (over.size > 0) state = 'over';
     else state = [...entities.values()].every((s) => s === 'full') && [...points.values()].every((s) => s === 'full') ? 'full' : 'under';
   }

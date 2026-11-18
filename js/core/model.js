@@ -1,5 +1,7 @@
 // Modèle géométrique de l'esquisse.
 // - points : { id, x, y, fixed }  (l'origine est un point fixe permanent, id 'origin')
+//   Un point posé avec l'outil Point porte sketchPoint: true : il existe sans entité et n'est jamais
+//   supprimé comme point orphelin.
 // - entités : ligne { p1, p2 }, cercle { c, r }, arc { c, s, e, ccw }
 //   Les entités référencent des points par id. Deux entités qui partagent un point
 //   sont « coïncidentes » (c'est ainsi que sont reliés les coins d'un rectangle).
@@ -85,7 +87,11 @@ export class Sketch {
     for (const k of this.constraints.values()) if (k.refs.includes(id)) out.push(k);
     return out;
   }
-  isEmpty() { return this.entities.size === 0; }
+  isEmpty() {
+    if (this.entities.size > 0) return false;
+    for (const p of this.points.values()) if (p.sketchPoint) return false;
+    return true;
+  }
 
   // ----- Suppression -----
   removeEntity(id) {
@@ -96,7 +102,7 @@ export class Sketch {
     for (const pid of this.entityPointIds(e)) this.pruneOrphanPoint(pid);
   }
   pruneOrphanPoint(pid) {
-    if (pid === ORIGIN_ID) return;
+    if (pid === ORIGIN_ID || this.points.get(pid)?.sketchPoint) return;
     if (this.entitiesOfPoint(pid).length === 0) {
       this.points.delete(pid);
       this.removeConstraintsReferencing(pid);
@@ -120,6 +126,8 @@ export class Sketch {
       for (const key of ['p1', 'p2', 'c', 's', 'e']) if (e[key] === drop) e[key] = keep;
     }
     for (const k of this.constraints.values()) k.refs = k.refs.map((r) => (r === drop ? keep : r));
+    const kp = this.points.get(keep), dp = this.points.get(drop);
+    if (kp && dp && dp.sketchPoint && !kp.origin) kp.sketchPoint = true;
     this.points.delete(drop);
     return keep;
   }
@@ -152,6 +160,7 @@ export class Sketch {
         grow(bb.minX, bb.minY); grow(bb.maxX, bb.maxY);
       }
     }
+    for (const p of this.points.values()) if (p.sketchPoint) grow(p.x, p.y);
     return b;
   }
 

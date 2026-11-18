@@ -133,7 +133,7 @@ export class Renderer {
       if (p.id === ORIGIN_ID) { if (sel.has(p.id) || (hl && hl.has(p.id))) this.drawPoint(vp.toScreen(p), C.selected, 5, C.canvasBg); continue; }
       const selected = sel.has(p.id) || (hl && hl.has(p.id));
       const state = err && err.has(p.id) ? 'over' : (an.points.get(p.id) || 'under');
-      this.drawPoint(vp.toScreen(p), selected ? C.selected : C[state], selected ? 5 : 3.5, C.canvasBg);
+      this.drawPoint(vp.toScreen(p), selected ? C.selected : C[state], selected ? 5 : p.sketchPoint ? 4.5 : 3.5, C.canvasBg);
     }
 
     // Icônes de relations

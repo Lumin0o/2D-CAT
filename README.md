@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.5.
+Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.6.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -39,6 +39,10 @@
 
 - Cotes ordinales : flèches comme les cotes normales. Sur la ligne de la cote 0, un trait relie chaque cote à la précédente (du même côté du 0) avec une flèche sur sa ligne d'attache ; la première a une flèche à chaque bout (0 ↔ cote). La valeur est placée juste après ce trait.
 - Fenêtre Aimantation : sous « Aimant », un interrupteur par type (extrémités et centres, milieux, quadrants, intersections, sur les entités, horizontale, verticale, tangence des arcs, grille). Couper un type coupe aussi la relation automatique correspondante. Quand « Aimant » est coupé, tous les types sont grisés et inactifs, grille comprise ; « Grille » est aussi grisé tant que la grille est masquée.
+
+## Ajout (0.2.6)
+
+- Outil Point (groupe Point, barre développée) : un toucher pose un point d'esquisse isolé. Il s'accroche comme les autres outils (milieu → point milieu, sur une entité ou une intersection → coïncident) et peut ensuite être coté, relié par des relations, déplacé ou servir d'extrémité à une ligne. Supprimer une entité qui l'utilise ne le supprime pas. Un seul toucher suffit, quel que soit le réglage « Poser les points ».
 
 ## Tester sur ordinateur
 

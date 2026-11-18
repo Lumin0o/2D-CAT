@@ -3,6 +3,7 @@ import { LineTool, LineMidTool } from './line.js';
 import { Rect2Tool, RectCenterTool, Rect3CornerTool, Rect3CenterTool, ParallelogramTool } from './rect.js';
 import { CircleCenterTool, Circle3Tool } from './circle.js';
 import { ArcCenterTool, Arc3Tool, ArcTangentTool } from './arc.js';
+import { PointTool } from './point.js';
 import { DimensionTool, DimHorizontalTool, DimVerticalTool, DimChainTool, DimOrdinateTool } from './dimension.js';
 
 export const GROUPS = [
@@ -25,6 +26,9 @@ export const GROUPS = [
     { id: 'arcCenter', label: 'Arc centre et extrémités', icon: 'arcCenter' },
     { id: 'arcTangent', label: 'Arc tangent', icon: 'arcTangent' },
     { id: 'arc3', label: 'Arc par 3 points', icon: 'arc3' },
+  ] },
+  { id: 'point', label: 'Point', tools: [
+    { id: 'point', label: 'Point', sub: 'Point d\'esquisse isolé', icon: 'point' },
   ] },
   { id: 'construction', label: 'Construction', tools: [
     { id: 'constructionLine', label: 'Ligne de construction', icon: 'construction', stage: 3 },
@@ -74,6 +78,7 @@ export const TOOL_CLASSES = {
   arcCenter: ArcCenterTool,
   arcTangent: ArcTangentTool,
   arc3: Arc3Tool,
+  point: PointTool,
   smartDimension: DimensionTool,
   dimHorizontal: DimHorizontalTool,
   dimVertical: DimVerticalTool,
