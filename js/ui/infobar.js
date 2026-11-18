@@ -26,7 +26,7 @@ export class InfoBar {
     let main = '', extra = '', editable = false, muted = false;
     if (this.app.measureText) { main = this.app.measureText; extra = this.app.measureExtra || ''; }
     else if (selection.size === 0) { main = 'Aucune sélection'; muted = true; }
-    else if (selection.size > 1) { main = describeMany(sketch, selection); extra = 'Choisissez une relation ci-dessus'; }
+    else if (selection.size > 1) { main = describeMany(sketch, selection); }
     else {
       const id = [...selection][0];
       const e = sketch.entities.get(id);

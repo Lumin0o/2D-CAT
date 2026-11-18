@@ -1,5 +1,6 @@
 // Réglages : valeurs par défaut, persistance, notification des changements.
 import { db } from './db.js';
+import { DEFAULT_VISIBILITY } from '../core/visibility.js';
 
 export const DEFAULT_FAVORITES = [
   'line', 'rect', 'circle', 'arc', 'construction', 'dimension',
@@ -38,6 +39,7 @@ export const DEFAULT_SETTINGS = {
   lastTools: {},              // groupId -> toolId (dernier outil utilisé du groupe)
   recentGroup: null,          // dernier groupe utilisé hors des cases fixes : affiché dans la dernière case
   offsetOpts: { chain: true, dim: true, construction: false },    // options de l'outil Décaler
+  visibility: { ...DEFAULT_VISIBILITY },  // affichage (bouton œil) : types d'éléments visibles sur le dessin
   rev: 1,                     // révision des réglages enregistrés (migrations)
 };
 

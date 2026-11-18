@@ -49,6 +49,8 @@ export const ICONS = {
   multi: S(`<rect x="3" y="3" width="11" height="11" rx="2"/><rect x="10" y="10" width="11" height="11" rx="2"/><path d="m12.5 15.5 2 2 4-4"/>`),
   check: S(`<path d="m5 12 5 5L20 7"/>`),
   close: S(`<path d="M6 6l12 12M18 6 6 18"/>`),
+  eye: S(`<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>`),
+  eyeOff: S(`<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16" stroke-width="2.2"/>`),
   fullscreen: S(`<path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/>`),
   save: S(`<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>`),
   open: S(`<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2H6l-3 9z"/>`),

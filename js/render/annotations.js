@@ -276,12 +276,13 @@ export const REL_LABEL = {
  * Chaque icône est posée à côté de son entité (ou de son point), à la première place libre : jamais sur une
  * entité, un point ou une autre icône (on essaie le long de l'entité, puis de l'autre côté, puis plus loin).
  */
-export function layoutBadges(sk, vp) {
+export function layoutBadges(sk, vp, hidden = null) {
   const out = [];
   const R = 9;                                  // demi-côté d'une icône (px), comme BADGE_R du rendu
   const tolE = vp.pxToWorld(R + 2.5);           // écart minimal icône ↔ entité
-  const ents = [...sk.entities.values()];
-  const pts = [...sk.points.values()].map((p) => vp.toScreen(p));
+  // éléments masqués (bouton œil) : ni icône, ni obstacle
+  const ents = [...sk.entities.values()].filter((e) => !hidden || !hidden.ents.has(e.id));
+  const pts = [...sk.points.values()].filter((p) => !hidden || !hidden.pts.has(p.id)).map((p) => vp.toScreen(p));
   const free = (x, y) => {
     for (const b of out) if (Math.abs(b.x - x) < 2 * R + 2 && Math.abs(b.y - y) < 2 * R + 2) return false;
     for (const q of pts) if (Math.abs(q.x - x) < R + 5 && Math.abs(q.y - y) < R + 5) return false;
@@ -326,7 +327,7 @@ export function layoutBadges(sk, vp) {
     place(cid, type, cands);
   };
   for (const k of sk.constraints.values()) {
-    if (isAnnotation(k)) continue;
+    if (isAnnotation(k) || (hidden && hidden.cons.has(k.id))) continue;
     if (k.type === 'coincident' || k.type === 'midpoint') { atPoint(k.id, k.type, k.refs[0]); continue; }
     if (k.type === 'symmetric') { atPoint(k.id, k.type, k.refs[0]); atPoint(k.id, k.type, k.refs[1]); continue; }
     if (k.type === 'offsetEq') { const e = sk.entities.get(k.refs[3]); if (e) atEntity(k.id, k.type, e); continue; }

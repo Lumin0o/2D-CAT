@@ -291,7 +291,7 @@ svg { display: block; }
 .switch.on::after { transform: translateX(20px); }
 
 /* ===== Canvas overlays ===== */
-.overlay { position: absolute; display: flex; align-items: flex-end; gap: 8px; bottom: 10px; }
+.overlay { position: absolute; display: flex; align-items: flex-end; gap: 8px; bottom: calc(10px + var(--info-grow)); }
 .overlay-col { display: flex; flex-direction: column; gap: 8px; }
 .round-btn.danger { color: var(--red); }
 .overlay-bl { left: 10px; }
@@ -314,7 +314,7 @@ svg { display: block; }
   pointer-events: none;
 }
 .toast {
-  position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: calc(64px + var(--info-grow)); left: 50%; transform: translateX(-50%);
   max-width: calc(100% - 24px);
   padding: 9px 16px; border-radius: 12px;
   background: var(--hint-bg); color: #fff;
@@ -325,10 +325,18 @@ svg { display: block; }
 .toast.error { background: var(--red); }
 
 /* ===== Bandeau d'infos ===== */
+/* Le bandeau grandit vers le haut, par-dessus le dessin, sans changer la taille de la zone de dessin :
+   le pied de page réserve la hauteur d'un bandeau d'une ligne (--info-h) ; les boutons du dessin
+   remontent d'autant que le bandeau grandit (--info-grow, mis à jour par l'app). */
+.app { --info-h: 48px; --info-grow: 0px; }
+.footer { position: relative; z-index: 8; padding-top: var(--info-h); }
 .infobar {
+  position: absolute; left: 0; right: 0; bottom: calc(100% - var(--info-h));
   display: flex; flex-direction: column; justify-content: center;
-  min-height: 46px; padding: 3px 12px;
+  min-height: var(--info-h); padding: 3px 12px;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 -1px 0 var(--border);
 }
 .infobar-line1 { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 1px; min-height: 24px; min-width: 0; }
 .info-main { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
@@ -430,7 +438,7 @@ button.row { width: 100%; text-align: left; }
 
 /* Actions de l'outil en cours (Valider, Garder l'original…) sous l'indication */
 .toolacts {
-  position: absolute; top: 48px; left: 8px; right: 8px;
+  position: absolute; top: 48px; left: 8px; right: 52px;
   display: flex; justify-content: center; flex-wrap: wrap; gap: 6px;
   pointer-events: none;
 }
@@ -474,6 +482,10 @@ button.row { width: 100%; text-align: left; }
 .round-btn.small { width: 36px; height: 36px; }
 .round-btn.small svg { width: 18px; height: 18px; }
 .full-btn { position: absolute; top: 10px; right: 10px; z-index: 6; }
+/* Affichage (œil) : sous le bouton plein écran */
+.vis-btn { position: absolute; top: 54px; right: 10px; z-index: 6; }
+.app.fullscreen .vis-btn { opacity: .55; box-shadow: none; }
+.app.fullscreen .vis-btn.on { opacity: 1; }
 .hint { max-width: calc(100% - 110px); }
 .app.fullscreen .toolbar,
 .app.fullscreen .toolbar-expanded,

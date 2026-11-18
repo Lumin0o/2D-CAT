@@ -15,7 +15,8 @@ import { Toolbar } from './ui/toolbar.js';
 import { InfoBar } from './ui/infobar.js';
 import { PopoverManager } from './ui/popover.js';
 import { showToast } from './ui/toast.js';
-import { openSnapPopover, openFilesPopover } from './ui/panels.js';
+import { openSnapPopover, openFilesPopover, openVisibilityPopover } from './ui/panels.js';
+import { hiddenItems, hiddenCount } from './core/visibility.js';
 import { SettingsPanel } from './ui/settingsPanel.js';
 import { Keypad } from './ui/keypad.js';
 import { RelationBar } from './ui/relations.js';
@@ -37,7 +38,7 @@ export class App {
     this.els = {
       app: $('app'), canvasWrap: $('canvas-wrap'), canvas: $('canvas'), hint: $('hint'),
       undo: $('btn-undo'), redo: $('btn-redo'), fit: $('btn-fit'), multi: $('btn-multi'), box: $('btn-box'),
-      full: $('btn-full'), toolacts: $('toolacts'), toolopts: $('toolopts'), ok: $('btn-ok'), del: $('btn-delete'),
+      full: $('btn-full'), vis: $('btn-vis'), toolacts: $('toolacts'), toolopts: $('toolopts'), ok: $('btn-ok'), del: $('btn-delete'),
       snap: $('btn-snap'), grid: $('btn-grid'), files: $('btn-files'), settings: $('btn-settings'),
       popoverLayer: $('popover-layer'), settingsPanel: $('settings-panel'),
     };
@@ -102,6 +103,7 @@ export class App {
     this.els.multi.innerHTML = icon('multi');
     this.els.box.innerHTML = icon('boxSelect');
     this.els.full.innerHTML = icon('fullscreen');
+    this.updateVisButton();
     this.els.snap.querySelector('.bb-icon').innerHTML = icon('magnet');
     this.els.grid.querySelector('.bb-icon').innerHTML = icon('grid');
     this.els.files.querySelector('.bb-icon').innerHTML = icon('folder');
@@ -113,12 +115,23 @@ export class App {
     click(this.els.multi, () => this.setSelMode(this.selMode === 'multi' ? null : 'multi'));
     click(this.els.box, () => this.setSelMode(this.selMode === 'box' ? null : 'box'));
     click(this.els.full, () => this.setFullscreen(!this.fullscreen));
+    click(this.els.vis, () => openVisibilityPopover(this, this.els.vis));
     click(this.els.ok, () => { const run = this._okRun; if (run) { run(); this.refreshUI(); } });
     click(this.els.snap, () => openSnapPopover(this, this.els.snap));
     click(this.els.grid, () => { const on = !this.settings.get('grid'); this.settings.set('grid', on); showToast(on ? 'Grille affichée' : 'Grille masquée'); });
     this.updateGridButton();
     click(this.els.files, () => openFilesPopover(this, this.els.files));
     click(this.els.settings, () => this.settingsPanel.open());
+
+    // Bandeau d'infos sur deux lignes ou plus : il grandit par-dessus le dessin, les boutons remontent avec lui
+    const info = $('infobar');
+    const syncInfo = () => {
+      const base = parseFloat(getComputedStyle(this.els.app).getPropertyValue('--info-h')) || 48;
+      const grow = Math.max(0, Math.round(info.offsetHeight - base));
+      this.els.app.style.setProperty('--info-grow', grow + 'px');
+    };
+    if (window.ResizeObserver) new ResizeObserver(syncInfo).observe(info);
+    this._syncInfo = syncInfo;
 
     // Gestes sur le dessin
     this.gestures = new Gestures(this.els.canvas, {
@@ -144,6 +157,7 @@ export class App {
       if (key === 'theme' || key === 'colors' || key === '*') { applyTheme(this.settings); this._colors = null; }
       if (['toolbarRows', 'toolbarCells', 'favorites', 'lastTools', 'recentGroup', '*'].includes(key)) this.toolbar.render();
       if (key === 'grid' || key === '*') this.updateGridButton();
+      if (key === 'visibility' || key === '*') this.onVisibilityChange();
       if ((key === 'drawInput' || key === '*') && this.tool) this.tool.updateHint();
       this.infobar.update();
       this.requestDraw();
@@ -187,12 +201,13 @@ export class App {
       requestDraw: () => self.requestDraw(),
       toast: (m) => showToast(m),
       deactivate: () => self.setTool(null),
-      hitGeometry: (wp) => hitTest(self.sketch, wp, self.vp.pxToWorld(HIT_PX)),
+      hitGeometry: (wp) => { const t = self.vp.pxToWorld(HIT_PX); return hitTest(self.sketch, wp, t, t, self.hidden()); },
       /** Entité la plus proche (sans priorité aux points), ou null. */
       hitEntity: (wp) => {
         const tol = self.vp.pxToWorld(HIT_PX);
         let best = null;
-        for (const e of self.sketch.entities.values()) { const d = entityDistance(self.sketch, e, wp); if (d <= tol && (!best || d < best.d)) best = { d, id: e.id }; }
+        const H = self.hidden();
+        for (const e of self.sketch.entities.values()) { if (H && H.ents.has(e.id)) continue; const d = entityDistance(self.sketch, e, wp); if (d <= tol && (!best || d < best.d)) best = { d, id: e.id }; }
         return best ? best.id : null;
       },
       createDimension: (k, label) => self.createDimension(k, label),
@@ -224,8 +239,10 @@ export class App {
     const T = this.snapTypes();
     if (this.settings.get('snap')) {
       let best = null;
+      const H = this.hidden();          // éléments masqués : pas d'aimantation dessus
       if (T.points) for (const p of sk.points.values()) {
         if (opt.excludePoints && opt.excludePoints.has(p.id)) continue;
+        if (H && H.pts.has(p.id)) continue;
         const d = dist(p, wp);
         if (d <= tol && (!best || d < best.d)) best = { d, p };
       }
@@ -234,6 +251,7 @@ export class App {
         const near = [];
         for (const e of sk.entities.values()) {
           if (opt.excludeEntities && opt.excludeEntities.has(e.id)) continue;
+          if (H && H.ents.has(e.id)) continue;
           const d = entityDistance(sk, e, wp);
           if (d <= tol) near.push({ e, d });
         }
@@ -349,7 +367,7 @@ export class App {
     this.renderer.draw({
       sketch: this.sketch, vp: this.vp, selection: this.selection, analysis: this.analysis,
       colors: this.colors(), settings: this.settings.data,
-      grid: { show: this.settings.get('grid'), info: this.gridInfo() },
+      grid: { show: this.settings.get('grid'), info: this.gridInfo() }, hidden: this.hidden(),
       tool: t, box: this.box, highlight: t && t.highlight, previewDim: t && t.previewDim,
       errorIds: this.errorIds, loupe, dragMarker,
     });
@@ -363,6 +381,22 @@ export class App {
     if (savedViewport) this.vp.fromJSON(savedViewport);
     this.popovers.position();
     this.requestDraw();
+  }
+  /** Éléments masqués (bouton œil), ou null si tout est visible. */
+  hidden() { return hiddenItems(this.sketch, this.settings.get('visibility')); }
+  /** Bouton œil : barré et en couleur quand quelque chose est masqué. */
+  updateVisButton() {
+    const n = hiddenCount(this.settings.get('visibility'));
+    this.els.vis.innerHTML = icon(n ? 'eyeOff' : 'eye');
+    this.els.vis.classList.toggle('on', n > 0);
+    this.els.vis.setAttribute('aria-label', n ? 'Affichage (éléments masqués)' : 'Affichage');
+  }
+  /** Affichage modifié : la sélection perd ce qui vient d'être masqué. */
+  onVisibilityChange() {
+    const H = this.hidden();
+    if (H) for (const id of [...this.selection]) if (H.ents.has(id) || H.pts.has(id) || H.cons.has(id)) this.selection.delete(id);
+    this.updateVisButton();
+    this.refreshUI();
   }
   refreshUI() {
     this.infobar.update();
@@ -580,8 +614,9 @@ export class App {
   /** Cotes, puis icônes de relations, puis points et entités. */
   hitAt(s, wp) {
     const sk = this.sketch;
+    const H = this.hidden();
     for (const k of sk.constraints.values()) {
-      if (!isAnnotation(k)) continue;
+      if (!isAnnotation(k) || (H && H.cons.has(k.id))) continue;
       const lay = dimLayout(sk, k);
       if (!lay) continue;
       const label = dimLabel(sk, k, this.settings.data);
@@ -593,12 +628,13 @@ export class App {
       if (Math.abs(lx) <= size.w / 2 + 5 && Math.abs(ly) <= size.h / 2 + 5) return { type: 'dim', id: k.id };
     }
     let bb = null;
-    for (const b of layoutBadges(sk, this.vp)) {
+    for (const b of layoutBadges(sk, this.vp, H)) {
       const d = Math.hypot(s.x - b.x, s.y - b.y);
       if (d <= BADGE_R + 2 && (!bb || d < bb.d)) bb = { d, id: b.cid };
     }
     if (bb) return { type: 'badge', id: bb.id };
-    return hitTest(sk, wp, this.vp.pxToWorld(HIT_PX));
+    const tol = this.vp.pxToWorld(HIT_PX);
+    return hitTest(sk, wp, tol, tol, H);
   }
 
   // ---------- Gestes un doigt ----------
@@ -654,7 +690,8 @@ export class App {
         if (!info.cancelled && box && this.tool.onBox) {
           const ids = [...this.boxHits(box, false)];
           const inBox = (p) => p.x >= box.minX && p.x <= box.maxX && p.y >= box.minY && p.y <= box.maxY;
-          const points = [...this.sketch.points.values()].filter((p) => p.id !== ORIGIN_ID && inBox(p)).map((p) => p.id);
+          const H = this.hidden();
+          const points = [...this.sketch.points.values()].filter((p) => p.id !== ORIGIN_ID && inBox(p) && !(H && H.pts.has(p.id))).map((p) => p.id);
           this.tool.onBox({ ids, points });
           if (this.tool) this.tool.updateHint();
         }
@@ -809,17 +846,19 @@ export class App {
   boxHits(box, withDims = true) {
     const sk = this.sketch;
     const hit = new Set();
+    const H = this.hidden();          // éléments masqués : jamais pris
     const inBox = (p) => p.x >= box.minX && p.x <= box.maxX && p.y >= box.minY && p.y <= box.maxY;
     for (const e of sk.entities.values()) {
+      if (H && H.ents.has(e.id)) continue;
       const ok = box.crossing ? entityTouchesRect(sk, e, box) : entityInsideRect(sk, e, box);
       if (ok) hit.add(e.id);
     }
-    for (const p of sk.points.values()) if (p.sketchPoint && inBox(p)) hit.add(p.id);
+    for (const p of sk.points.values()) if (p.sketchPoint && inBox(p) && !(H && H.pts.has(p.id))) hit.add(p.id);
     if (!withDims) return hit;
     // cotes : par leur texte (rectangle écran ramené en monde)
     const a = this.vp.toScreen({ x: box.minX, y: box.maxY }), b = this.vp.toScreen({ x: box.maxX, y: box.minY });
     for (const k of sk.constraints.values()) {
-      if (!isAnnotation(k)) continue;
+      if (!isAnnotation(k) || (H && H.cons.has(k.id))) continue;
       const lay = dimLayout(sk, k);
       if (!lay) continue;
       const label = dimLabel(sk, k, this.settings.data);

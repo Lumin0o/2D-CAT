@@ -1,7 +1,8 @@
-// Fenêtres « Aimantation et grille » et « Fichiers ».
+// Fenêtres « Aimantation et grille », « Affichage » et « Fichiers ».
 import { popoverItem, popoverTitle, switchRow } from './popover.js';
 import { icon } from './icons.js';
 import { showToast } from './toast.js';
+import { VIS_TYPES, DEFAULT_VISIBILITY } from '../core/visibility.js';
 
 /** Types d'aimantation, dans l'ordre de la fenêtre (clé de settings.snapTypes, libellé). */
 export const SNAP_TYPES = [
@@ -41,16 +42,40 @@ export function openSnapPopover(app, anchor) {
       for (const [key, label] of SNAP_TYPES) {
         sub(label, app.snapTypes()[key], (on) => S.set('snapTypes', { ...app.snapTypes(), [key]: on }));
       }
-      // la grille s'affiche avec le bouton voisin ; l'aimantation à la grille n'agit que si elle est affichée
-      const gridOn = !!S.get('grid');
-      sub('Grille', S.get('gridSnap'), (on) => S.set('gridSnap', on), () => gridOn);
-      if (!gridOn) {
-        const note = document.createElement('div');
-        note.className = 'popover-note';
-        note.textContent = 'Affichez la grille (bouton à droite) pour aimanter dessus.';
-        el.appendChild(note);
-      }
+      // la grille s'affiche avec le bouton voisin ; l'interrupteur reste réglable même grille masquée
+      sub('Grille', S.get('gridSnap'), (on) => S.set('gridSnap', on));
       refresh();
+    },
+  });
+}
+
+/**
+ * Fenêtre « Affichage » (bouton œil) : un interrupteur par type d'élément, plus « Tout afficher » et
+ * « Tout masquer » (actif quand tout est affiché, ou tout masqué ; le couper fait l'inverse).
+ */
+export function openVisibilityPopover(app, anchor) {
+  app.popovers.toggle({
+    anchor, side: 'below', width: 250,
+    build: (el) => {
+      const S = app.settings;
+      const cur = () => ({ ...DEFAULT_VISIBILITY, ...(S.get('visibility') || {}) });
+      const setAll = (on) => S.set('visibility', Object.fromEntries(VIS_TYPES.map(([k]) => [k, on])));
+      const render = () => {
+        el.innerHTML = '';
+        const v = cur();
+        const all = VIS_TYPES.every(([k]) => v[k]), none = VIS_TYPES.every(([k]) => !v[k]);
+        el.appendChild(popoverTitle('Affichage'));
+        el.appendChild(switchRow('Tout afficher', all, (on) => { setAll(on); render(); }));
+        el.appendChild(switchRow('Tout masquer', none, (on) => { setAll(!on); render(); }));
+        el.appendChild(document.createElement('div')).className = 'popover-sep';
+        for (const [key, label] of VIS_TYPES) {
+          const row = switchRow(label, v[key], (on) => { S.set('visibility', { ...cur(), [key]: on }); render(); });
+          row.classList.add('sub');
+          el.appendChild(row);
+        }
+        app.popovers.position();
+      };
+      render();
     },
   });
 }

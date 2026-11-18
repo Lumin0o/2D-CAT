@@ -17,17 +17,19 @@ export function entityDistance(sk, e, wp) {
 }
 
 /**
- * Test de toucher. Les points ont la priorité sur les entités.
+ * Test de toucher. Les points ont la priorité sur les entités. hidden : éléments masqués, ignorés.
  * @returns {{type:'point'|'entity', id:string, d:number}|null}
  */
-export function hitTest(sk, wp, tolPoint, tolEntity = tolPoint) {
+export function hitTest(sk, wp, tolPoint, tolEntity = tolPoint, hidden = null) {
   let best = null;
   for (const p of sk.points.values()) {
+    if (hidden && hidden.pts.has(p.id)) continue;
     const d = dist(p, wp);
     if (d <= tolPoint && (!best || d < best.d)) best = { type: 'point', id: p.id, d };
   }
   if (best) return best;
   for (const e of sk.entities.values()) {
+    if (hidden && hidden.ents.has(e.id)) continue;
     const d = entityDistance(sk, e, wp);
     if (d <= tolEntity && (!best || d < best.d)) best = { type: 'entity', id: e.id, d };
   }

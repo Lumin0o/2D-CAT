@@ -101,7 +101,8 @@ export class Renderer {
     ctx.fillStyle = C.canvasBg;
     ctx.fillRect(0, 0, vp.width, vp.height);
     if (st.grid.show) this.drawGrid(st.grid.info, C);
-    this.drawAxes(C);
+    const H = st.hidden || null;       // éléments masqués (bouton œil)
+    if (!H || H.axes) this.drawAxes(C);
 
     const sk = st.sketch;
     const sel = st.selection;
@@ -110,6 +111,7 @@ export class Renderer {
     const err = st.errorIds;
 
     for (const e of sk.entities.values()) {
+      if (H && H.ents.has(e.id)) continue;
       const selected = sel.has(e.id) || (hl && hl.has(e.id));
       const state = err && err.has(e.id) ? 'over' : (an.entities.get(e.id) || 'under');
       ctx.strokeStyle = selected ? C.selected : C[state];
@@ -122,7 +124,7 @@ export class Renderer {
 
     // Cotes
     for (const k of sk.constraints.values()) {
-      if (!isAnnotation(k)) continue;
+      if (!isAnnotation(k) || (H && H.cons.has(k.id))) continue;
       const color = sel.has(k.id) ? C.selected : (an.constraints.get(k.id) === 'over' || (err && err.has(k.id))) ? C.over : k.driven ? C.dimDriven : C.dim;
       this.drawDimension(sk, k, color, st);
     }
@@ -130,6 +132,7 @@ export class Renderer {
 
     // Points (extrémités, centres)
     for (const p of sk.points.values()) {
+      if (H && H.pts.has(p.id) && !(hl && hl.has(p.id))) continue;
       if (p.id === ORIGIN_ID) { if (sel.has(p.id) || (hl && hl.has(p.id))) this.drawPoint(vp.toScreen(p), C.selected, 5, C.canvasBg); continue; }
       const selected = sel.has(p.id) || (hl && hl.has(p.id));
       const state = err && err.has(p.id) ? 'over' : (an.points.get(p.id) || 'under');
@@ -142,7 +145,7 @@ export class Renderer {
       ctx.font = `bold 11px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      for (const b of layoutBadges(sk, vp)) {
+      for (const b of layoutBadges(sk, vp, H)) {
         if (b.x < -20 || b.y < -20 || b.x > vp.width + 20 || b.y > vp.height + 20) continue;
         const selected = sel.has(b.cid);
         const over = an.constraints.get(b.cid) === 'over';
