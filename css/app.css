@@ -1,21 +1,21 @@
 /* ===== Thème ===== */
 :root {
-  /* thème clair légèrement assombri (0.3.8), fond du dessin #e8e8f0 (0.3.9) : le blanc pur fatiguait les yeux */
-  --bg: #dcdce6;
-  --surface: #f1f1f7;
-  --surface2: #d9d9e3;
+  /* thème clair légèrement assombri (0.3.8), fond du dessin #e8e8f0 (0.3.9), encore assombri (0.3.10) : le blanc pur fatiguait les yeux */
+  --bg: #cbcbd7;
+  --surface: #e2e2ea;
+  --surface2: #cacad5;
   --text: #111111;
-  --text2: #66666b;
+  --text2: #5c5c64;
   --accent: #0a84ff;
   --green: #30b14e;
   --red: #e5342b;
-  --border: #c3c3cf;
-  --canvas-bg: #e8e8f0;
-  --grid-paper: #b4b8c0;
+  --border: #b2b2c0;
+  --canvas-bg: #d8d8e2;
+  --grid-paper: #a2a6b2;
   --grid-alpha: 1;
-  --axis: #a8a8ae;
+  --axis: #95959f;
   --shadow: 0 8px 28px rgba(0,0,0,.22);
-  --overlay-btn: rgba(241,241,247,.9);
+  --overlay-btn: rgba(226,226,234,.92);
   --hint-bg: rgba(40,40,48,.78);
   color-scheme: light;
 }
