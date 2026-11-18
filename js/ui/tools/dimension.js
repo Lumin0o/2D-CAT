@@ -58,12 +58,14 @@ export class DimensionTool extends Tool {
         const o = pos ? dimOrientation(sk.points.get(ids[0]), sk.points.get(ids[1]), pos) : 'aligned';
         return { type: o === 'h' ? 'dimHorizontal' : o === 'v' ? 'dimVertical' : 'dimDistance', refs: ids };
       }
-      case 'PL': return { type: 'dimPointLine', refs: ids };
-      case 'LP': return { type: 'dimPointLine', refs: [ids[1], ids[0]] };
+      case 'PL': return withSym(sk, { type: 'dimPointLine', refs: ids }, pos);
+      case 'LP': return withSym(sk, { type: 'dimPointLine', refs: [ids[1], ids[0]] }, pos);
       case 'LL': {
-        const a = sk.entities.get(ids[0]), b = sk.entities.get(ids[1]);
+        let a = sk.entities.get(ids[0]), b = sk.entities.get(ids[1]);
         const d1 = norm(sub(sk.points.get(a.p2), sk.points.get(a.p1))), d2 = norm(sub(sk.points.get(b.p2), sk.points.get(b.p1)));
-        return Math.abs(cross(d1, d2)) < 1e-6 ? { type: 'dimLineLine', refs: ids } : { type: 'dimAngle', refs: ids };
+        if (Math.abs(cross(d1, d2)) >= 1e-6) return { type: 'dimAngle', refs: ids };
+        if (b.construction && !a.construction) [a, b] = [b, a];      // la ligne de construction sert d'axe
+        return withSym(sk, { type: 'dimLineLine', refs: [a.id, b.id] }, pos);
       }
       default: return null;
     }
@@ -74,6 +76,7 @@ export class DimensionTool extends Tool {
     if (!c) return null;
     const sk = this.tc.sketch;
     const k = { type: c.type, refs: c.refs, pos: { x: pos.x, y: pos.y } };
+    if (c.sym) k.sym = true;
     if (c.type === 'dimAngle') {
       const s = angleSetup(sk, sk.entities.get(c.refs[0]), sk.entities.get(c.refs[1]), pos);
       if (!s || s.value < 1e-6) return null;
@@ -115,6 +118,22 @@ export class DimensionTool extends Tool {
     if (this.picks.length) { this.setPicks([]); this.tc.requestDraw(); return true; }
     return false;
   }
+}
+
+/**
+ * Cote par rapport à une ligne de construction (axe) : placée de l'autre côté de l'axe, elle devient
+ * symétrique (comme le diamètre de SOLIDWORKS) et vaut deux fois la distance à l'axe.
+ */
+function withSym(sk, c, pos) {
+  const axis = c.type === 'dimPointLine' ? sk.entities.get(c.refs[1]) : sk.entities.get(c.refs[0]);
+  if (!pos || !axis || !axis.construction) return c;
+  const p = c.type === 'dimPointLine' ? sk.points.get(c.refs[0]) : sk.points.get(sk.entities.get(c.refs[1]).p1);
+  const a = sk.points.get(axis.p1), b = sk.points.get(axis.p2);
+  const u = norm(sub(b, a));
+  const side = (q) => cross(u, sub(q, a));
+  const sp = side(p), sq = side(pos);
+  if (Math.abs(sp) > 1e-9 && sp * sq < 0) c.sym = true;
+  return c;
 }
 
 /** Point visé : un point, l'extrémité la plus proche d'une ligne touchée, ou le centre d'un arc / cercle. */

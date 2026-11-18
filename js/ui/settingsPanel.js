@@ -86,6 +86,17 @@ export class SettingsPanel {
     const n = (s.get('toolbarRows') === 2 ? 2 : 1) * this.app.toolbar.cellsPerRow();
     const favs = s.get('favorites');
     for (let i = 0; i < n; i++) {
+      if (i === n - 1) {
+        // dernière case : automatique
+        const g = this.app.toolbar.recentGroup();
+        const d = describeFavorite(g || favs[i]);
+        const r = document.createElement('div');
+        r.className = 'row';
+        const ic = d ? icon(d.kind === 'tool' ? d.tool.icon : d.group.tools[0].icon) : '';
+        r.innerHTML = `<span class="row-label">Case ${i + 1}<br><small class="row-sub">Dernier groupe utilisé</small></span><span class="row-value"><span class="fav-icon">${ic}</span>${d ? (d.kind === 'tool' ? d.tool.label : d.group.label) : '—'}</span>`;
+        card.appendChild(r);
+        continue;
+      }
       const d = describeFavorite(favs[i]);
       const r = document.createElement('button');
       r.className = 'row';
@@ -115,7 +126,7 @@ export class SettingsPanel {
 
     body.appendChild(title('À propos'));
     card = document.createElement('div'); card.className = 'card';
-    card.appendChild(row('Esquisse 2D', textValue(`Version ${APP_VERSION} · étape 2`)));
+    card.appendChild(row('Esquisse 2D', textValue(`Version ${APP_VERSION} · étape 3`)));
     const off = textValue('Vérification…');
     card.appendChild(row('Hors ligne', off));
     offlineStatus().then((t) => { off.textContent = t; });

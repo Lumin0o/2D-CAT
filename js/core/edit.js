@@ -314,12 +314,14 @@ const ends = (e) => (e.type === 'line' ? [e.p1, e.p2] : e.type === 'arc' ? [e.s,
  * Chaîne d'entités reliées bout à bout à partir de eid (lignes et arcs ; on s'arrête aux embranchements).
  * @returns {{items:Array<{id:string, rev:boolean}>, closed:boolean}}
  */
-export function chainFrom(sk, eid) {
+export function chainFrom(sk, eid, { chain = true } = {}) {
   const e0 = sk.entities.get(eid);
   if (!e0) return { items: [], closed: false };
   if (e0.type === 'circle') return { items: [{ id: eid, rev: false }], closed: true };
+  if (!chain) return { items: [{ id: eid, rev: false }], closed: false };
+  // les lignes de construction ne font pas partie d'un contour (et inversement)
   const nextAt = (pid, fromId) => {
-    const es = endpointEntities(sk, pid).filter((e) => e.id !== fromId);
+    const es = endpointEntities(sk, pid).filter((e) => e.id !== fromId && !!e.construction === !!e0.construction);
     return es.length === 1 ? es[0] : null;
   };
   const items = [{ id: eid, rev: false }];
@@ -434,14 +436,22 @@ function geomIntersections(g1, g2) {
   return circleCircle(g1.c, g1.r, g2.c, g2.r);
 }
 /** Crée les entités décalées. Raccords partagés ; lignes parallèles et arcs concentriques à l'original. */
-export function offsetChain(sk, chain, d, side) {
+/**
+ * Crée le contour décalé.
+ * opts.construction : les nouvelles entités sont des lignes de construction (sinon trait normal) ;
+ * opts.dim : ajoute une cote (valeur d) et des relations « décalage identique » qui verrouillent tout le contour ;
+ * opts.gap : écart (monde) entre le contour décalé et le texte de la cote.
+ */
+export function offsetChain(sk, chain, d, side, opts = {}) {
   const geo = offsetGeometry(sk, chain, d, side);
   if (!geo) return { ok: false, msg: 'Distance trop grande : un arc disparaîtrait' };
   const n = geo.length;
   const made = [];
+  const cons = { construction: !!opts.construction };
   if (n === 1 && geo[0].kind === 'circle') {
     const g = geo[0];
-    const c = sk.addCircle(g.e.c, g.r, { construction: g.e.construction });
+    const c = sk.addCircle(g.e.c, g.r, cons);
+    if (opts.dim) lockOffset(sk, [{ o: g.e.id, n: c.id }], d, opts.gap || 0);
     return { ok: true, ids: [c.id] };
   }
   // raccords partagés J[i] entre l'élément i et le suivant ; bouts libres pour une chaîne ouverte
@@ -458,14 +468,38 @@ export function offsetChain(sk, chain, d, side) {
     const [a, b] = g.it.rev ? [endPts[i], startPts[i]] : [startPts[i], endPts[i]];
     let ne;
     if (g.kind === 'line') {
-      ne = sk.addLine(a, b, { construction: e.construction });
+      ne = sk.addLine(a, b, cons);
       sk.addConstraint('parallel', [e.id, ne.id]);
     } else {
-      ne = sk.addArc(e.c, a, b, e.ccw, { construction: e.construction });
+      ne = sk.addArc(e.c, a, b, e.ccw, cons);
     }
     made.push(ne.id);
   }
+  if (opts.dim) lockOffset(sk, chain.items.map((it, i) => ({ o: it.id, n: made[i] })), d, opts.gap || 0);
   return { ok: true, ids: made };
+}
+
+/**
+ * Verrouille un décalage : une cote sur la première ligne (distance entre l'original et la copie), ou le rayon
+ * de la copie s'il n'y a que des arcs / cercles, puis « décalage identique » pour les autres paires.
+ */
+function lockOffset(sk, pairs, d, gap) {
+  const P = (id) => sk.points.get(id);
+  const ref = pairs.find((q) => sk.entities.get(q.o).type === 'line') || pairs[0];
+  const o = sk.entities.get(ref.o), ne = sk.entities.get(ref.n);
+  if (o.type === 'line') {
+    const m = mid(P(ne.p1), P(ne.p2));
+    const a = P(o.p1), u = norm(sub(P(o.p2), a));
+    const h = cross(u, sub(m, a)) >= 0 ? 1 : -1;               // côté de la copie
+    const pos = add(m, mul(perp(u), h * gap));
+    sk.addConstraint('dimLineLine', [o.id, ne.id], { value: d, pos });
+  } else {
+    const c = P(ne.c);
+    const r = ne.type === 'circle' ? ne.r : dist(c, P(ne.s));
+    const dir = { x: Math.SQRT1_2, y: Math.SQRT1_2 };
+    sk.addConstraint('dimRadius', [ne.id], { value: r, pos: add(c, mul(dir, r + gap)) });
+  }
+  for (const q of pairs) if (q !== ref) sk.addConstraint('offsetEq', [ref.o, ref.n, q.o, q.n]);
 }
 
 // ---------- Miroir ----------

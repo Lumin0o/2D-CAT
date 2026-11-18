@@ -56,6 +56,7 @@ export class ConstructionLineTool extends LineTool {
 
 /** Ligne par le milieu : premier point = milieu, deuxième = une extrémité. */
 export class LineMidTool extends Tool {
+  get construction() { return false; }
   hint() { return this.pts.length === 0 ? 'Touchez le milieu de la ligne' : 'Touchez une extrémité'; }
   step() {
     if (this.pts.length < 2) return;
@@ -66,11 +67,11 @@ export class LineMidTool extends Tool {
     const sk = this.tc.sketch;
     const p1 = sk.addPoint(other.x, other.y);
     const p2 = this.tc.resolvePoint(end);
-    const line = sk.addLine(p1.id, p2.id);
+    const line = sk.addLine(p1.id, p2.id, { construction: this.construction });
     if (end.align === 'h') sk.addConstraint('horizontal', [line.id]);
     if (end.align === 'v') sk.addConstraint('vertical', [line.id]);
     if (m.pointId) sk.addConstraint('midpoint', [m.pointId, line.id]);
-    this.tc.commit('Ligne par le milieu');
+    this.tc.commit(this.construction ? 'Ligne de construction par le milieu' : 'Ligne par le milieu');
     this.pts = [];
   }
   liveValue() {
@@ -81,8 +82,13 @@ export class LineMidTool extends Tool {
     if (this.pts.length === 1 && this.cursor) {
       const m = this.pts[0];
       const end = this.tc.autoAlign(m, this.cursor);
-      d.line(sub(mul(m, 2), end), end);
+      d.line(sub(mul(m, 2), end), end, this.construction);
       d.point(m);
     }
   }
+}
+
+/** Ligne de construction par le milieu. */
+export class ConstructionLineMidTool extends LineMidTool {
+  get construction() { return true; }
 }

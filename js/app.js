@@ -26,6 +26,7 @@ const HIT_PX = 12;      // zone de toucher élargie autour des traits et points
 const SNAP_PX = 14;     // rayon d'aimantation
 const DRAG_PX = 6;      // seuil de glissement
 const ALIGN_DEG = 3;    // tolérance de redressement horizontal / vertical
+const ENTITY_SNAPS = new Set(['on', 'midpoint', 'quadrant', 'intersection']);
 const HEAVY = 1e6;      // coût de déplacement des éléments qui doivent rester en place
 
 const seqOf = (id) => parseInt(String(id).slice(1), 36);
@@ -36,7 +37,7 @@ export class App {
     this.els = {
       app: $('app'), canvasWrap: $('canvas-wrap'), canvas: $('canvas'), hint: $('hint'),
       undo: $('btn-undo'), redo: $('btn-redo'), fit: $('btn-fit'), multi: $('btn-multi'), box: $('btn-box'),
-      full: $('btn-full'), toolacts: $('toolacts'),
+      full: $('btn-full'), toolacts: $('toolacts'), toolopts: $('toolopts'), ok: $('btn-ok'), del: $('btn-delete'),
       snap: $('btn-snap'), grid: $('btn-grid'), files: $('btn-files'), settings: $('btn-settings'),
       popoverLayer: $('popover-layer'), settingsPanel: $('settings-panel'),
     };
@@ -112,6 +113,7 @@ export class App {
     click(this.els.multi, () => this.setSelMode(this.selMode === 'multi' ? null : 'multi'));
     click(this.els.box, () => this.setSelMode(this.selMode === 'box' ? null : 'box'));
     click(this.els.full, () => this.setFullscreen(!this.fullscreen));
+    click(this.els.ok, () => { const run = this._okRun; if (run) { run(); this.refreshUI(); } });
     click(this.els.snap, () => openSnapPopover(this, this.els.snap));
     click(this.els.grid, () => { const on = !this.settings.get('grid'); this.settings.set('grid', on); showToast(on ? 'Grille affichée' : 'Grille masquée'); });
     this.updateGridButton();
@@ -140,7 +142,7 @@ export class App {
     // Réglages → interface
     this.settings.onChange((key) => {
       if (key === 'theme' || key === 'colors' || key === '*') { applyTheme(this.settings); this._colors = null; }
-      if (['toolbarRows', 'toolbarCells', 'favorites', 'lastTools', '*'].includes(key)) this.toolbar.render();
+      if (['toolbarRows', 'toolbarCells', 'favorites', 'lastTools', 'recentGroup', '*'].includes(key)) this.toolbar.render();
       if (key === 'grid' || key === '*') this.updateGridButton();
       if ((key === 'drawInput' || key === '*') && this.tool) this.tool.updateHint();
       this.infobar.update();
@@ -203,6 +205,7 @@ export class App {
       signedAngleKeypad: (title, rad, cb) => self.signedAngleKeypad(title, rad, cb),
       pxToWorld: (px) => self.vp.pxToWorld(px),
       keypadOpen: () => self.keypad.isOpen(),
+      setSetting: (key, value) => self.settings.set(key, value, true),
       endpointTangent: (pid) => {
         const es = endpointEntities(self.sketch, pid);
         if (!es.length) return null;
@@ -341,6 +344,7 @@ export class App {
       else if (this.drag && this.drag.active && this.drag.single) { const p = this.sketch.points.get(this.drag.single); if (p) loupe = { finger: this.finger, world: { x: p.x, y: p.y } }; }
     }
     if (this.drag && this.drag.active && this.drag.mergeWith) { const p = this.sketch.points.get(this.drag.mergeWith); if (p) dragMarker = { x: p.x, y: p.y, kind: 'point' }; }
+    else if (this.drag && this.drag.active && this.drag.snapOn) dragMarker = this.drag.snapOn;
     this.renderer.draw({
       sketch: this.sketch, vp: this.vp, selection: this.selection, analysis: this.analysis,
       colors: this.colors(), settings: this.settings.data,
@@ -454,9 +458,13 @@ export class App {
       this._pendingSel = [];
       this.toolId = id;
       const g = groupOf(id);
-      if (g) this.settings.set('lastTools', { ...this.settings.get('lastTools'), [g.id]: id }, true);
+      if (g) {
+        this.settings.set('lastTools', { ...this.settings.get('lastTools'), [g.id]: id }, true);
+        this.toolbar.noteGroupUsed(g.id);
+      }
     } else this.setHint('');
     this.toolbar.setActive(this.toolId);
+    this.updateToolOptions();
     this.scheduleSave();
     this.refreshUI();
   }
@@ -489,6 +497,7 @@ export class App {
    * pointillée, éléments touchés), ou aucun : sélection simple, et glisser dans le vide déplace la vue.
    */
   setSelMode(mode) {
+    if (mode && this.tool) this.setTool(null);     // passer en sélection quitte l'outil en cours
     this.selMode = mode;
     this.els.multi.classList.toggle('on', mode === 'multi');
     this.els.box.classList.toggle('on', mode === 'box');
@@ -508,21 +517,60 @@ export class App {
     this.els.full.setAttribute('aria-label', on ? 'Quitter le plein écran' : 'Plein écran');
     this.popovers.close();
     if (on && this.toolbar.expanded) this.toolbar.setExpanded(false);
+    this.updateToolActions();
     setTimeout(() => this.onResize(), 30);
   }
-  /** Boutons d'action de l'outil en cours (sous l'indication). */
+  /**
+   * Boutons d'action de l'outil en cours : « Valider » prend la place de la corbeille (jamais visibles ensemble :
+   * la sélection est reprise par l'outil) ; les autres actions sont sous l'indication. En plein écran, les
+   * boutons du bas sont masqués : Valider rejoint alors les autres actions.
+   */
   updateToolActions() {
     const el = this.els.toolacts;
     const acts = this.tool && this.tool.actions ? this.tool.actions() : [];
+    const primary = this.fullscreen ? null : acts.find((a) => a.cls === 'primary');
+    const chips = acts.filter((a) => a !== primary);
+    const ok = this.els.ok;
+    ok.hidden = !primary;
+    this._okRun = primary ? primary.run : null;
+    if (primary) {
+      ok.innerHTML = icon('check') + `<span>Valider${primary.count ? ` (${primary.count})` : ''}</span>`;
+      ok.setAttribute('aria-label', primary.label);
+      this.els.del.hidden = true;
+    }
     el.innerHTML = '';
-    el.hidden = !acts.length;
-    for (const a of acts) {
+    el.hidden = !chips.length;
+    for (const a of chips) {
       const b = document.createElement('button');
       b.className = 'rel-chip ' + (a.cls || '');
       b.innerHTML = (a.glyph ? `<span class="glyph">${a.glyph}</span>` : '') + a.label;
       b.addEventListener('click', (e) => { e.preventDefault(); a.run(); this.refreshUI(); });
       el.appendChild(b);
     }
+  }
+  /** Options de l'outil en cours (petite fenêtre sous la barre d'outils, ex. Décaler). */
+  updateToolOptions() {
+    const el = this.els.toolopts;
+    const opts = this.tool && this.tool.options ? this.tool.options() : [];
+    el.innerHTML = '';
+    el.hidden = !opts.length;
+    for (const o of opts) {
+      const r = document.createElement('button');
+      r.className = 'topt-row';
+      r.innerHTML = `<span class="topt-label">${o.label}${o.sub ? `<small>${o.sub}</small>` : ''}</span><span class="switch small${o.value ? ' on' : ''}"></span>`;
+      r.addEventListener('click', (e) => {
+        e.preventDefault();
+        o.set(!o.value);
+        this.updateToolOptions();
+        if (this.tool) this.tool.updateHint();
+        this.refreshUI();
+      });
+      el.appendChild(r);
+    }
+    // l'indication et les actions passent sous la fenêtre
+    const h = opts.length ? el.offsetHeight : 0;
+    this.els.hint.style.top = h ? `${h + 16}px` : '';
+    this.els.toolacts.style.top = h ? `${h + 54}px` : '';
   }
 
   // ---------- Test de toucher (mode sélection) ----------
@@ -658,12 +706,16 @@ export class App {
       const p = sk.points.get(d.single);
       if (!p) return;
       let target = snapG(wp);
-      d.mergeWith = null;
+      d.mergeWith = null; d.snapOn = null;
       if (this.settings.get('snap')) {
+        // aimantation sur les points, puis sur les entités (sauf celles du point lui-même) :
+        // au lâcher, le point devient coïncident (ou milieu) comme pendant le tracé
         const exclude = new Set([d.single]);
-        for (const e of sk.entitiesOfPoint(d.single)) for (const pid of sk.entityPointIds(e)) exclude.add(pid);
-        const s = this.snap(wp, { excludePoints: exclude, pointsOnly: true });
+        const own = new Set();
+        for (const e of sk.entitiesOfPoint(d.single)) { own.add(e.id); for (const pid of sk.entityPointIds(e)) exclude.add(pid); }
+        const s = this.snap(wp, { excludePoints: exclude, excludeEntities: own });
         if (s.pointId) { target = { x: s.x, y: s.y }; d.mergeWith = s.pointId; }
+        else if (ENTITY_SNAPS.has(s.kind)) { target = { x: s.x, y: s.y }; d.snapOn = s; }
       }
       p.x = target.x; p.y = target.y;
       weights.set(d.single, HEAVY);
@@ -691,6 +743,15 @@ export class App {
       sk.cleanupDegenerate();
       if (!solve(sk).ok) { this.sketch = Sketch.deserialize(before); showToast('Coïncidence impossible ici'); }
       else { this.selection.delete(d.single); void keep; }
+    } else if (d.mode === 'point' && d.snapOn && sk.points.has(d.single)) {
+      // point lâché sur une entité : relation coïncidente (ou point milieu), annulée si impossible
+      const before = sk.serialize();
+      const s = d.snapOn;
+      const ids = s.kind === 'intersection' ? (s.entityIds || []) : [s.entityId];
+      const type = s.kind === 'midpoint' && sk.entities.get(s.entityId)?.type === 'line' ? 'midpoint' : 'coincident';
+      for (const id of ids) if (sk.entities.has(id)) sk.addConstraint(type, [d.single, id]);
+      if (!solve(sk).ok) { this.sketch = Sketch.deserialize(before); showToast('Coïncidence impossible ici', { error: true }); }
+      else { this.commit(type === 'midpoint' ? 'Point milieu' : 'Coïncidente', { auto: true }); return; }
     }
     this.commit('Déplacement');
   }
@@ -704,15 +765,19 @@ export class App {
     this.selection.clear();
     this.selection.add(hit.id);
   }
-  /** Cadre : ajoute à la sélection les entités, les points isolés et les cotes (fenêtre : entièrement dedans ; capture : touchés). */
+  /**
+   * Cadre : les entités, points isolés et cotes pris dans le cadre (fenêtre : entièrement dedans ; capture : touchés)
+   * sont ajoutés à la sélection ; ceux qui y étaient déjà en sont retirés.
+   */
   finishBox(box) {
     const sk = this.sketch;
+    const hit = new Set();
     const inBox = (p) => p.x >= box.minX && p.x <= box.maxX && p.y >= box.minY && p.y <= box.maxY;
     for (const e of sk.entities.values()) {
       const ok = box.crossing ? entityTouchesRect(sk, e, box) : entityInsideRect(sk, e, box);
-      if (ok) this.selection.add(e.id);
+      if (ok) hit.add(e.id);
     }
-    for (const p of sk.points.values()) if (p.sketchPoint && inBox(p)) this.selection.add(p.id);
+    for (const p of sk.points.values()) if (p.sketchPoint && inBox(p)) hit.add(p.id);
     // cotes : par leur texte (rectangle écran ramené en monde)
     const a = this.vp.toScreen({ x: box.minX, y: box.maxY }), b = this.vp.toScreen({ x: box.maxX, y: box.minY });
     for (const k of sk.constraints.values()) {
@@ -725,8 +790,9 @@ export class App {
       const [hw, hh] = lay.rot ? [size.h / 2, size.w / 2] : [size.w / 2, size.h / 2];
       const inside = t.x - hw >= a.x && t.x + hw <= b.x && t.y - hh >= a.y && t.y + hh <= b.y;
       const touch = t.x + hw >= a.x && t.x - hw <= b.x && t.y + hh >= a.y && t.y - hh <= b.y;
-      if (box.crossing ? touch : inside) this.selection.add(k.id);
+      if (box.crossing ? touch : inside) hit.add(k.id);
     }
+    for (const id of hit) { if (this.selection.has(id)) this.selection.delete(id); else this.selection.add(id); }
   }
   deleteSelection() {
     if (this.selection.size === 0) return;

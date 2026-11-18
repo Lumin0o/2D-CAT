@@ -1,5 +1,5 @@
 // Registre des groupes d'outils (comme SOLIDWORKS) et des classes d'outils.
-import { LineTool, LineMidTool, ConstructionLineTool } from './line.js';
+import { LineTool, LineMidTool, ConstructionLineTool, ConstructionLineMidTool } from './line.js';
 import { Rect2Tool, RectCenterTool, Rect3CornerTool, Rect3CenterTool, ParallelogramTool } from './rect.js';
 import { CircleCenterTool, Circle3Tool } from './circle.js';
 import { ArcCenterTool, Arc3Tool, ArcTangentTool } from './arc.js';
@@ -36,6 +36,7 @@ export const GROUPS = [
   ] },
   { id: 'construction', label: 'Construction', tools: [
     { id: 'constructionLine', label: 'Ligne de construction', icon: 'construction' },
+    { id: 'constructionMid', label: 'Ligne de construction par le milieu', icon: 'constructionMid' },
     { id: 'toggleConstruction', label: 'Basculer en construction', icon: 'constructionToggle' },
   ] },
   { id: 'dimension', label: 'Cotation', tools: [
@@ -89,6 +90,7 @@ export const TOOL_CLASSES = {
   dimChain: DimChainTool,
   dimOrdinate: DimOrdinateTool,
   constructionLine: ConstructionLineTool,
+  constructionMid: ConstructionLineMidTool,
   toggleConstruction: ToggleConstructionTool,
   measure: MeasureTool,
   trim: TrimTool,

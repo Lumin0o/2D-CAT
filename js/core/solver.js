@@ -174,6 +174,19 @@ export function buildSystem(sk) {
         });
         break;
       }
+      case 'offsetEq': {
+        // décalage verrouillé : l'écart (orig → copie) de la 2ᵉ paire est égal à celui de la 1ʳᵉ
+        const gap = (o, n) => {
+          if (isLine(o) && isLine(n)) return { pids: [o.p1, o.p2, n.p1], rids: [], f: () => sdist(n.p1, o.p1, o.p2) };
+          if (isCurve(o) && isCurve(n)) { const co = curve(o), cn = curve(n); return { pids: [...co.pids, ...cn.pids], rids: [...co.rids, ...cn.rids], f: () => cn.r() - co.r() }; }
+          return null;
+        };
+        const g1 = gap(A, B), g2 = gap(ent(r[2]), ent(r[3]));
+        if (!g1 || !g2) break;
+        const s1 = g1.f() < 0 ? -1 : 1, s2 = g2.f() < 0 ? -1 : 1;
+        add(k.id, [...g1.pids, ...g2.pids], [...g1.rids, ...g2.rids], () => s1 * g1.f() - s2 * g2.f());
+        break;
+      }
       case 'dimLength': if (isLine(A)) add(k.id, [A.p1, A.p2], [], () => dist(A.p1, A.p2) - k.value); break;
       case 'dimDistance': if (P0 && P1) add(k.id, [r[0], r[1]], [], () => dist(r[0], r[1]) - k.value); break;
       case 'dimHorizontal':
@@ -190,7 +203,8 @@ export function buildSystem(sk) {
         const p = k.type === 'dimPointLine' ? r[0] : (isLine(B) ? B.p1 : null);
         if (!isLine(L) || !p || !sk.points.has(p)) break;
         const sgn = sdist(p, L.p1, L.p2) < 0 ? -1 : 1;
-        add(k.id, [p, L.p1, L.p2], [], () => sgn * sdist(p, L.p1, L.p2) - k.value);
+        const f = k.sym ? 2 : 1;      // cote symétrique : deux fois la distance à l'axe
+        add(k.id, [p, L.p1, L.p2], [], () => f * sgn * sdist(p, L.p1, L.p2) - k.value);
         break;
       }
       case 'dimAngle': {

@@ -7,7 +7,7 @@ import { entityLength } from '../../core/query.js';
 import { fmtLength, fmtAngle } from '../../core/units.js';
 import {
   trimAt, extendAt, filletLines, chamferLines, cornerLines, chainFrom, offsetSide, offsetGeometry, offsetChain,
-  mirrorEntities, transformSelection, translation, rotation,
+  mirrorEntities, transformSelection, translation, rotation, reflectPoint,
 } from '../../core/edit.js';
 
 const HEAVY = 1e6;
@@ -120,7 +120,8 @@ export class MeasureTool extends Tool {
   liveValue() { return this.a && !this.b && this.cursor ? this.fmtL(dist(this.a, this.cursor)) : null; }
   preview(d) {
     const a = this.a, b = this.b || (this.a && this.cursor);
-    if (a && b) { d.line(a, b, true); d.point(a); d.point(b); }
+    if (a && b) d.measure(a, b);
+    else if (a) d.measurePoint(a);
   }
 }
 
@@ -177,9 +178,23 @@ export class OffsetTool extends PickTool {
     const ids = this.tc.takeSelection().filter((id) => this.tc.sketch.entities.has(id));
     if (ids.length) this.setChain(ids[0]);
   }
-  hint() { return this.chain ? 'Touchez le côté où décaler' : 'Touchez le contour à décaler'; }
+  /** Options (petite fenêtre sous la barre d'outils), gardées dans les réglages. */
+  get opts() { return { chain: true, dim: false, construction: false, ...(this.tc.settings.offsetOpts || {}) }; }
+  options() {
+    const o = this.opts;
+    const set = (key) => (v) => {
+      this.tc.setSetting('offsetOpts', { ...this.opts, [key]: v });
+      if (key === 'chain' && this.chain) this.setChain(this.chainStart);
+    };
+    return [
+      { label: 'Sélectionner la chaîne', sub: 'Entités reliées bout à bout (hors construction)', value: o.chain, set: set('chain') },
+      { label: 'Ajouter une cote', sub: 'Verrouille la distance de décalage', value: o.dim, set: set('dim') },
+      { label: 'Construction', sub: 'Le décalage est une ligne de construction', value: o.construction, set: set('construction') },
+    ];
+  }
+  hint() { return this.chain ? 'Touchez le côté où décaler' : (this.opts.chain ? 'Touchez le contour à décaler' : 'Touchez l\'entité à décaler'); }
   setChain(eid) {
-    this.chain = chainFrom(this.tc.sketch, eid);
+    this.chain = chainFrom(this.tc.sketch, eid, { chain: this.opts.chain });
     this.chainStart = eid;
     this.highlight = new Set(this.chain.items.map((i) => i.id));
   }
@@ -202,7 +217,9 @@ export class OffsetTool extends PickTool {
     this.d = init;
     this.tc.lengthKeypad('Distance de décalage', init, (mm) => {
       OffsetTool.lastD = mm;
-      this.tc.applyEdit('Décaler', (sk) => offsetChain(sk, chainFrom(sk, start), mm, side));
+      const o = this.opts;
+      const gap = this.tc.pxToWorld(26);
+      this.tc.applyEdit('Décaler', (sk) => offsetChain(sk, chainFrom(sk, start, { chain: o.chain }), mm, side, { construction: o.construction, dim: o.dim, gap }));
       this.reset();
       this.tc.refreshUI();
     });
@@ -215,13 +232,14 @@ export class OffsetTool extends PickTool {
     if (!this.chain || !this.side || !(this.d > 0)) return;
     const geo = offsetGeometry(this.tc.sketch, this.chain, this.d, this.side);
     if (!geo) return;
+    const dash = this.opts.construction;
     for (const g of geo) {
-      if (g.kind === 'line') d.line(g.S, g.E);
-      else if (g.kind === 'circle') d.circle(g.c, g.r);
+      if (g.kind === 'line') d.line(g.S, g.E, dash);
+      else if (g.kind === 'circle') d.circle(g.c, g.r, dash);
       else {
         const a1 = angleOf(sub(g.S, g.c)), a2 = angleOf(sub(g.E, g.c));
         const ccwTrav = g.e.ccw !== g.it.rev;
-        d.arc(g.c, g.r, a1, a2, ccwTrav);
+        d.arc(g.c, g.r, a1, a2, ccwTrav, dash);
       }
     }
   }
@@ -246,7 +264,7 @@ class SelectThenActTool extends PickTool {
   actions() {
     if (this.phase !== 'pick') return [{ label: 'Changer la sélection', glyph: '↺', run: () => { this.phase = 'pick'; this.updateHint(); } }];
     if (!this.items.length) return [];
-    return [{ label: `Valider (${this.items.length})`, glyph: '✓', cls: 'primary', run: () => { this.phase = this.firstPhase; this.onPicked(); this.updateHint(); } }];
+    return [{ label: `Valider (${this.items.length})`, count: this.items.length, glyph: '✓', cls: 'primary', run: () => { this.phase = this.firstPhase; this.onPicked(); this.updateHint(); } }];
   }
   onPicked() {}
   tapPick(wp) {
@@ -263,31 +281,56 @@ class SelectThenActTool extends PickTool {
 
 /** Miroir : les éléments à copier, puis la ligne de symétrie. Les copies restent symétriques (relations). */
 export class MirrorTool extends SelectThenActTool {
+  reset() { this.axis = null; this.axisHover = null; super.reset(); }
   get firstPhase() { return 'axis'; }
-  hint() { return this.phase === 'pick' ? 'Touchez les éléments à copier en miroir, puis Valider' : 'Touchez la ligne de symétrie'; }
+  hint() {
+    if (this.phase === 'pick') return 'Touchez les éléments à copier en miroir, puis Valider';
+    return this.axis ? 'Valider pour créer la symétrie · touchez une autre ligne pour changer d\'axe' : 'Touchez la ligne de symétrie';
+  }
+  onPicked() { this.axis = null; }
+  actions() {
+    if (this.phase !== 'axis') return super.actions();
+    const acts = [{ label: 'Changer la sélection', glyph: '↺', run: () => { this.phase = 'pick'; this.axis = null; this.updateHint(); } }];
+    if (this.axis) acts.push({ label: 'Valider la symétrie', glyph: '✓', cls: 'primary', run: () => this.apply() });
+    return acts;
+  }
   hover(wp) {
     if (this.phase !== 'axis') return;
     const id = this.tc.hitEntity(wp);
     const e = id && this.tc.sketch.entities.get(id);
     this.axisHover = e && e.type === 'line' ? id : null;
   }
-  get highlight() { return new Set([...(this._hl || []), ...(this.axisHover ? [this.axisHover] : [])]); }
+  get highlight() { return new Set([...(this._hl || []), ...(this.axisHover ? [this.axisHover] : []), ...(this.axis ? [this.axis] : [])]); }
   set highlight(v) { this._hl = v; }
   tap(wp) {
     if (this.phase === 'pick') { this.tapPick(wp); return; }
     const id = this.tc.hitEntity(wp);
     const e = id && this.tc.sketch.entities.get(id);
     this.axisHover = null;
-    if (!e || e.type !== 'line') { this.tc.toast('Touchez une ligne (ligne de construction de préférence)'); return; }
+    if (!e || e.type !== 'line') { if (!id) return; this.tc.toast('Touchez une ligne (ligne de construction de préférence)'); return; }
+    if (id === this.axis) { this.axis = null; return; }
+    if (!this.items.some((x) => x !== id)) { this.tc.toast('L\'axe ne peut pas être le seul élément copié'); return; }
+    this.axis = id;
+  }
+  apply() {
+    const id = this.axis;
     const items = this.items.filter((x) => x !== id);
-    if (!items.length) { this.tc.toast('L\'axe ne peut pas être le seul élément copié'); return; }
+    if (!id || !items.length) return;
     const r = this.tc.applyEdit('Miroir', (sk) => mirrorEntities(sk, items, id));
     if (r.ok) this.reset();
+    this.updateHint();
+  }
+  preview(d) {
+    if (!this.axis) return;
+    const sk = this.tc.sketch, ax = sk.entities.get(this.axis);
+    if (!ax) return;
+    const a = sk.points.get(ax.p1), b = sk.points.get(ax.p2);
+    ghost(d, sk, this.items.filter((x) => x !== this.axis), (p) => reflectPoint(p, a, b), true);
   }
 }
 
 /** Aperçu « fantôme » des éléments transformés par f. */
-function ghost(d, sk, items, f) {
+function ghost(d, sk, items, f, flip = false) {
   for (const id of items) {
     const e = sk.entities.get(id);
     if (!e) { const p = sk.points.get(id); if (p) d.point(f(p)); continue; }
@@ -296,7 +339,7 @@ function ghost(d, sk, items, f) {
     else if (e.type === 'circle') d.circle(P(e.c), e.r);
     else {
       const c = P(e.c), s = P(e.s), en = P(e.e);
-      d.arc(c, dist(c, s), angleOf(sub(s, c)), angleOf(sub(en, c)), e.ccw);
+      d.arc(c, dist(c, s), angleOf(sub(s, c)), angleOf(sub(en, c)), flip ? !e.ccw : e.ccw);
     }
   }
 }

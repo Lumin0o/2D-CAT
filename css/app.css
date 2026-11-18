@@ -436,6 +436,37 @@ button.row { width: 100%; text-align: left; }
 .rel-chip.on .glyph { background: var(--accent); }
 .rel-chip.off .glyph { background: var(--surface2); color: var(--text2); }
 
+/* Valider (outil en cours) : à la place de la corbeille */
+.overlay-col { align-items: flex-end; }
+.ok-btn {
+  min-height: 44px; padding: 0 16px 0 12px; border-radius: 22px;
+  display: flex; align-items: center; gap: 6px;
+  background: var(--green); color: #fff; font-size: 15px; font-weight: 600; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18);
+}
+.ok-btn svg { width: 20px; height: 20px; stroke-width: 2.4; }
+.ok-btn:active { filter: brightness(.88); }
+
+/* Options de l'outil en cours (ex. Décaler) : petite fenêtre sous la barre d'outils */
+.toolopts {
+  position: absolute; top: 8px; left: 8px; z-index: 5;
+  width: 290px; max-width: calc(100% - 62px);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  overflow: hidden;
+}
+.topt-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; min-height: 42px; padding: 4px 10px; text-align: left;
+}
+.topt-row + .topt-row { border-top: 1px solid var(--border); }
+.topt-label { display: flex; flex-direction: column; font-size: 14px; line-height: 1.2; min-width: 0; }
+.topt-label small { font-size: 11px; color: var(--text2); }
+.switch.small { width: 40px; height: 24px; border-radius: 12px; }
+.switch.small::after { width: 20px; height: 20px; }
+.switch.small.on::after { transform: translateX(16px); }
+.row-sub { font-size: 12px; color: var(--text2); }
+
 /* Plein écran : bouton discret en haut à droite */
 .round-btn.small { width: 36px; height: 36px; }
 .round-btn.small svg { width: 18px; height: 18px; }

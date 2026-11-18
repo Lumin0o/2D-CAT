@@ -412,6 +412,13 @@ export class Renderer {
       arc(o, r, a1, a2, ccw, dashed = false) { style(dashed); self.worldPath((c) => c.arc(o.x, o.y, r, a1, a2, !ccw)); ctx.stroke(); ctx.setLineDash([]); },
       point(p) { self.drawPoint(self.vp.toScreen(p), C.preview, 3.5, C.canvasBg); },
       sketchPoint(p) { self.drawSketchPoint(self.vp.toScreen(p), C.preview, 4.5, C.canvasBg); },
+      /** Mesure du Mètre : pointillés verts et ses deux bouts. */
+      measure(a, b) {
+        ctx.strokeStyle = C.green; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+        self.worldPath((c) => { c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); }); ctx.stroke(); ctx.setLineDash([]);
+        for (const p of [a, b]) self.drawPoint(self.vp.toScreen(p), C.green, 3.5, C.canvasBg);
+      },
+      measurePoint(p) { self.drawPoint(self.vp.toScreen(p), C.green, 3.5, C.canvasBg); },
       guide(a, b) { ctx.strokeStyle = C.guide; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); self.worldPath((c) => { c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); }); ctx.stroke(); ctx.setLineDash([]); },
     };
   }

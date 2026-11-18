@@ -1,5 +1,5 @@
 // Barre d'outils réduite (favoris) et développée (tous les groupes), avec appui long → variantes.
-import { GROUPS, getTool, describeFavorite, isAvailable } from './tools/registry.js';
+import { GROUPS, getTool, getGroup, describeFavorite, isAvailable } from './tools/registry.js';
 import { icon } from './icons.js';
 import { pressable } from './pressable.js';
 import { popoverItem, popoverTitle } from './popover.js';
@@ -33,7 +33,11 @@ export class Toolbar {
     this.els.bar.classList.toggle('rows-2', rows === 2);
     const cols = this.cellsPerRow();
     this.els.bar.style.setProperty('--tb-cols', cols);
-    const favs = s.get('favorites').slice(0, rows * cols);
+    const n = rows * cols;
+    const favs = s.get('favorites').slice(0, n);
+    // dernière case : le dernier groupe utilisé qui n'est pas déjà dans les autres cases
+    const recent = this.recentGroup();
+    if (recent) favs[n - 1] = recent;
     this.els.cells.innerHTML = '';
     favs.forEach((item) => {
       const d = describeFavorite(item);
@@ -45,6 +49,26 @@ export class Toolbar {
     });
     this.renderExpanded();
     this.setActive(this.activeToolId);
+  }
+
+  slotCount() { return (this.app.settings.get('toolbarRows') === 2 ? 2 : 1) * this.cellsPerRow(); }
+  /** Groupes déjà présents dans les cases fixes (toutes sauf la dernière). */
+  fixedGroups() {
+    const ids = new Set();
+    for (const item of this.app.settings.get('favorites').slice(0, this.slotCount() - 1)) {
+      const d = describeFavorite(item);
+      if (d) ids.add(d.group.id);
+    }
+    return ids;
+  }
+  recentGroup() {
+    const r = this.app.settings.get('recentGroup');
+    return r && getGroup(r) && !this.fixedGroups().has(r) ? r : null;
+  }
+  /** Un outil de ce groupe vient d'être choisi : il devient le « dernier groupe utilisé » s'il n'a pas sa case. */
+  noteGroupUsed(gid) {
+    if (this.fixedGroups().has(gid) || this.app.settings.get('recentGroup') === gid) return;
+    this.app.settings.set('recentGroup', gid);
   }
 
   renderExpanded() {

@@ -196,5 +196,55 @@ const bboxOf = (sk, ids) => {
   ok(r.ok && solve(sk).ok && ![...sk.constraints.values()].some((k) => (k.type === 'horizontal' || k.type === 'vertical') && ids.includes(k.refs[0])), 'rotation 30° : H/V retirées');
 }
 
+// ---- Décalage : options (chaîne, cote de verrouillage, construction) ----
+{
+  const sk = new Sketch();
+  const { l, pts } = rect(sk, 0, 0, 40, 20);
+  sk.addConstraint('fixed', [pts[0]]); sk.addConstraint('fixed', [pts[2]]);   // original entièrement défini
+  // une ligne de construction partant d'un coin ne coupe pas le contour
+  const cons = sk.addLine(pts[1], sk.addPoint(60, -10).id, { construction: true });
+  const ch = chainFrom(sk, l[0].id);
+  ok(ch.closed && ch.items.length === 4 && !ch.items.some((i) => i.id === cons.id), 'chaîne : la ligne de construction est ignorée');
+  ok(chainFrom(sk, l[0].id, { chain: false }).items.length === 1, 'sans chaîne : une seule entité');
+  const res = offsetChain(sk, ch, 3, offsetSide(sk, ch, { x: 45, y: 10 }).side, { dim: true, construction: true, gap: 2 });
+  ok(res.ok && res.ids.every((id) => sk.entities.get(id).construction), 'décalage en construction');
+  const dims = [...sk.constraints.values()].filter((k) => k.type === 'dimLineLine');
+  const eqs = [...sk.constraints.values()].filter((k) => k.type === 'offsetEq');
+  ok(dims.length === 1 && near(dims[0].value, 3) && eqs.length === 3, 'cote 3 + 3 relations « décalage identique »');
+  ok(solve(sk).ok, 'décalage verrouillé : solveur ok');
+  const an = analyze(sk);
+  ok(an.over.size === 0, 'décalage verrouillé : pas de sur-contrainte');
+  const newPts = new Set(res.ids.flatMap((id) => sk.entityPointIds(sk.entities.get(id))));
+  ok([...newPts].every((pid) => an.points.get(pid) === 'full'), 'décalage verrouillé : contour entièrement contraint');
+  dims[0].value = 5;
+  ok(solve(sk).ok, 'cote passée à 5 : solveur ok');
+  const b = bboxOf(sk, res.ids);
+  ok(near(b.minX, -5, 1e-5) && near(b.maxX, 45, 1e-5) && near(b.minY, -5, 1e-5) && near(b.maxY, 25, 1e-5), 'tout le contour suit la cote : -5…45 × -5…25');
+  // cercle seul : rayon de la copie
+  const sk2 = new Sketch();
+  const c0 = sk2.addPoint(0, 0);
+  const c = sk2.addCircle(c0.id, 10);
+  const ch2 = chainFrom(sk2, c.id);
+  const r2 = offsetChain(sk2, ch2, 2, offsetSide(sk2, ch2, { x: 0, y: 13 }).side, { dim: true });
+  const dr = [...sk2.constraints.values()].find((k) => k.type === 'dimRadius');
+  ok(r2.ok && dr && dr.refs[0] === r2.ids[0] && near(dr.value, 12), 'cercle : cote de rayon R12 sur la copie');
+}
+
+// ---- Cote symétrique par rapport à un axe (ligne de construction) ----
+{
+  const sk = new Sketch();
+  const a = sk.addPoint(0, 0), b = sk.addPoint(0, 10);
+  const axis = sk.addLine(a.id, b.id, { construction: true });
+  sk.addConstraint('fixed', [a.id]); sk.addConstraint('fixed', [b.id]);
+  const p = sk.addPoint(3, 5);
+  sk.addConstraint('dimPointLine', [p.id, axis.id], { value: 10, sym: true });
+  ok(solve(sk).ok && near(Math.abs(p.x), 5, 1e-6), 'point : cote symétrique 10 → 5 de l\'axe');
+  const q1 = sk.addPoint(4, 0), q2 = sk.addPoint(4, 10);
+  const L = sk.addLine(q1.id, q2.id);
+  sk.addConstraint('parallel', [axis.id, L.id]);
+  sk.addConstraint('dimLineLine', [axis.id, L.id], { value: 12, sym: true });
+  ok(solve(sk).ok && near(Math.abs(q1.x), 6, 1e-6) && near(Math.abs(q2.x), 6, 1e-6), 'ligne : cote symétrique 12 → 6 de l\'axe');
+}
+
 print(fails ? `${fails} ÉCHEC(S)` : 'TOUS LES TESTS PASSENT');
 if (fails) throw new Error('tests en échec');

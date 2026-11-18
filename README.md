@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.0.
+Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.1.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -68,6 +68,18 @@
 - **Plein écran** : petit bouton en haut à droite du dessin ; masque la barre d'outils, le bandeau et les boutons. Le même bouton, discret, permet d'en sortir.
 - Correction du solveur : la tangence d'un arc qui part du bout d'une ligne (arc tangent, congé) était jugée redondante et pouvait disparaître ; elle s'écrit maintenant « rayon perpendiculaire à la ligne » au point de contact.
 - Les calculs (ajuster, prolonger, décaler, miroir, congé, chanfrein, transformations) sont dans `js/core/edit.js`, testés dans `test/edit.test.js`. Toute opération qui rendrait l'esquisse impossible à résoudre est annulée avec un message.
+
+## Retours iPhone intégrés (0.3.1)
+
+- Mètre : mesure en pointillés verts.
+- Activer la sélection multiple ou le cadre quitte l'outil en cours. Un cadre retire de la sélection les éléments qui y étaient déjà (bascule).
+- **Ligne de construction par le milieu** (groupe Construction).
+- **Cote symétrique** : une cote entre un élément et une ligne de construction, placée de l'autre côté de cette ligne, vaut deux fois la distance (comme le diamètre de SOLIDWORKS). Elle est dessinée de l'élément à son image.
+- **Valider** prend la place de la corbeille (les deux ne sont jamais visibles en même temps : l'outil reprend la sélection). En plein écran, il rejoint les autres actions sous l'indication.
+- Miroir : après le choix de l'axe, aperçu de la copie puis **Valider** ; toucher une autre ligne change l'axe.
+- Décaler : petite fenêtre d'options sous la barre d'outils (gardées dans les réglages) : **Sélectionner la chaîne** (entités reliées bout à bout, sans les lignes de construction), **Ajouter une cote** (cote de la distance + relations « décalage identique » D : tout le contour suit la cote ; pour un cercle ou des arcs seuls, cote de rayon de la copie), **Construction**.
+- Barre réduite : la dernière case affiche le dernier groupe utilisé qui n'a pas déjà sa case (réglages : « Case n · Dernier groupe utilisé »).
+- Glisser un point sur une entité (ligne, cercle, arc, milieu, intersection) l'y aimante ; au lâcher, il devient coïncident (ou point milieu), comme pendant le tracé.
 
 ## Tester sur ordinateur
 

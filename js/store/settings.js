@@ -36,6 +36,8 @@ export const DEFAULT_SETTINGS = {
   grid: false,
   gridSnap: true,             // aimantation à la grille (si l'aimant est actif et la grille affichée)
   lastTools: {},              // groupId -> toolId (dernier outil utilisé du groupe)
+  recentGroup: null,          // dernier groupe utilisé hors des cases fixes : affiché dans la dernière case
+  offsetOpts: { chain: true, dim: false, construction: false },   // options de l'outil Décaler
 };
 
 function deepMerge(base, over) {

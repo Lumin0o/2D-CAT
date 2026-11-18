@@ -56,9 +56,9 @@ export class InfoBar {
         const v = k.driven ? dimMeasure(sketch, k) : k.value;
         main = `Cote ${k.type === 'dimAngle' ? fmtAngle(v, S) : fmtLength(v, S)}`;
         const over = analysis.constraints.get(k.id) === 'over';
-        extra = k.driven ? 'Cote pilotée (mesure seule)'
+        extra = (k.sym ? 'Symétrique par rapport à l\'axe · ' : '') + (k.driven ? 'Cote pilotée (mesure seule)'
           : k.broken ? 'Valeur impossible : modifiez-la, rendez-la pilotée ou supprimez une relation'
-          : over ? 'Sur-contraint : rendez une cote pilotée ou supprimez une relation' : 'Cote pilotante · double tap pour modifier';
+          : over ? 'Sur-contraint : rendez une cote pilotée ou supprimez une relation' : 'Cote pilotante · double tap pour modifier');
         editable = !k.driven;
       } else if (k) {
         main = `Relation : ${REL_LABEL[k.type] || k.type}`;

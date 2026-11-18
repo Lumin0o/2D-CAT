@@ -56,8 +56,8 @@ export function dimMeasure(sk, k) {
     case 'dimDistance': return dist(P(sk, k.refs[0]), P(sk, k.refs[1]));
     case 'dimHorizontal': return Math.abs(P(sk, k.refs[1]).x - P(sk, k.refs[0]).x);
     case 'dimVertical': return Math.abs(P(sk, k.refs[1]).y - P(sk, k.refs[0]).y);
-    case 'dimPointLine': { const a = P(sk, B.p1), b = P(sk, B.p2); return Math.abs(cross(sub(P(sk, k.refs[0]), a), norm(sub(b, a)))); }
-    case 'dimLineLine': { const a = P(sk, A.p1), b = P(sk, A.p2); return Math.abs(cross(sub(P(sk, B.p1), a), norm(sub(b, a)))); }
+    case 'dimPointLine': { const a = P(sk, B.p1), b = P(sk, B.p2); return (k.sym ? 2 : 1) * Math.abs(cross(sub(P(sk, k.refs[0]), a), norm(sub(b, a)))); }
+    case 'dimLineLine': { const a = P(sk, A.p1), b = P(sk, A.p2); return (k.sym ? 2 : 1) * Math.abs(cross(sub(P(sk, B.p1), a), norm(sub(b, a)))); }
     case 'dimAngle': { const { r1, r2 } = angleRays(sk, k); return Math.abs(Math.atan2(cross(r1, r2), dot(r1, r2))); }
     case 'dimRadius': return curveOf(sk, A).r;
     default: return 0;
@@ -112,13 +112,26 @@ export function dimLayout(sk, k) {
     out.text = add(a2, mul(d, t));
     return out;
   };
-  const toLine = (p, a, b) => {
+  const toLine = (p, a, b, sym = false) => {
     const u = norm(sub(b, a)), n = perp(u);
     const L = dist(a, b);
     const t = dot(sub(pos, a), u);
     const h = dot(sub(p, a), n);
     const foot = add(a, mul(u, t));
     const top = add(foot, mul(n, h));
+    if (sym) {
+      // cote symétrique : de l'élément à son image de l'autre côté de l'axe (a, b)
+      const bot = add(foot, mul(n, -h));
+      const sg = h >= 0 ? 1 : -1;
+      out.ext.push([p, top], [add(p, mul(n, -2 * h)), bot]);
+      if (t < 0) out.ext.push([a, foot]); else if (t > L) out.ext.push([b, foot]);
+      out.segs.push([top, bot]);
+      out.arrows.push({ p: top, dir: mul(n, sg) }, { p: bot, dir: mul(n, -sg) });
+      const s = dot(sub(pos, a), n);
+      out.text = add(foot, mul(n, s));
+      if (Math.abs(s) > Math.abs(h)) out.segs.push([s * sg > 0 ? top : bot, out.text]);
+      return out;
+    }
     out.segs.push([foot, top]);
     out.ext.push([p, top]);
     if (t < 0) out.ext.push([a, foot]); else if (t > L) out.ext.push([b, foot]);
@@ -134,8 +147,8 @@ export function dimLayout(sk, k) {
     case 'dimDistance': return aligned(P(sk, k.refs[0]), P(sk, k.refs[1]));
     case 'dimHorizontal': return projected(P(sk, k.refs[0]), P(sk, k.refs[1]), { x: 1, y: 0 });
     case 'dimVertical': return projected(P(sk, k.refs[0]), P(sk, k.refs[1]), { x: 0, y: 1 });
-    case 'dimPointLine': return B ? toLine(P(sk, k.refs[0]), P(sk, B.p1), P(sk, B.p2)) : null;
-    case 'dimLineLine': return A && B ? toLine(P(sk, B.p1), P(sk, A.p1), P(sk, A.p2)) : null;
+    case 'dimPointLine': return B ? toLine(P(sk, k.refs[0]), P(sk, B.p1), P(sk, B.p2), k.sym) : null;
+    case 'dimLineLine': return A && B ? toLine(P(sk, B.p1), P(sk, A.p1), P(sk, A.p2), k.sym) : null;
     case 'dimAngle': {
       if (!A || !B) return null;
       const { X, r1, r2 } = angleRays(sk, k);
@@ -215,12 +228,12 @@ function ordinateLayout(sk, k) {
 // ---------- Icônes de relations ----------
 export const REL_GLYPH = {
   horizontal: 'H', vertical: 'V', parallel: '//', perpendicular: '⊥', tangent: 'T', concentric: '◎',
-  equal: '=', collinear: '≡', symmetric: 'S', midpoint: 'M', coincident: '•', fixed: 'F',
+  equal: '=', collinear: '≡', symmetric: 'S', midpoint: 'M', coincident: '•', fixed: 'F', offsetEq: 'D',
 };
 export const REL_LABEL = {
   horizontal: 'Horizontale', vertical: 'Verticale', coincident: 'Coïncidente', collinear: 'Colinéaire',
   parallel: 'Parallèle', perpendicular: 'Perpendiculaire', tangent: 'Tangente', concentric: 'Concentrique',
-  equal: 'Égale', symmetric: 'Symétrique', midpoint: 'Point milieu', fixed: 'Fixe',
+  equal: 'Égale', symmetric: 'Symétrique', midpoint: 'Point milieu', fixed: 'Fixe', offsetEq: 'Décalage identique',
 };
 
 /** Positions écran des icônes de relations : [{cid, x, y, type}]. */
@@ -251,6 +264,7 @@ export function layoutBadges(sk, vp) {
     if (isAnnotation(k)) continue;
     if (k.type === 'coincident' || k.type === 'midpoint') { atPoint(k.id, k.type, k.refs[0]); continue; }
     if (k.type === 'symmetric') { atPoint(k.id, k.type, k.refs[0]); atPoint(k.id, k.type, k.refs[1]); continue; }
+    if (k.type === 'offsetEq') { const e = sk.entities.get(k.refs[3]); if (e) atEntity(k.id, k.type, e); continue; }
     for (const r of k.refs) {
       const e = sk.entities.get(r);
       if (e) atEntity(k.id, k.type, e); else atPoint(k.id, k.type, r);

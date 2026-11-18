@@ -17,6 +17,7 @@ export const ICONS = {
   point: S(`<path d="M12 5v14M5.9 8.5l12.2 7M5.9 15.5l12.2-7" stroke-width="2"/>`),
   arc3: S(`<path d="M4 17A9 9 0 0 1 20 17"/>${dot(4, 17)}${dot(20, 17)}${dot(12, 8)}`),
   construction: S(`<path d="M4 19 20 5" stroke-dasharray="3 3"/>`),
+  constructionMid: S(`<path d="M4 19 20 5" stroke-dasharray="3 3"/>${dot(12, 12)}<path d="M9.5 9.5l5 5" stroke-width="1.2"/>`),
   constructionToggle: S(`<path d="M4 19 20 5" stroke-dasharray="3 3"/><path d="M4 9h5M4 6h5" stroke-width="1.5"/><path d="M15 18h5M15 15h5"/>`),
   dimension: S(`<path d="M4 15V7M20 15V7M5 11h14"/><path d="m8 9-3 2 3 2M16 9l3 2-3 2"/><path d="M4 19h16" stroke-width="2.2"/>`),
   dimH: S(`<path d="M4 9V3M20 9V3M5 6h14"/><path d="m8 4.5-3 1.5 3 1.5M16 4.5l3 1.5-3 1.5"/>${dot(4, 20)}${dot(20, 13)}<path d="M4 20 20 13" stroke-width="1" stroke-dasharray="2 2"/>`),
