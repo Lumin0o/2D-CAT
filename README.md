@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.10.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.0.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -108,6 +108,19 @@
 - Aperçus des modifications (Symétrie, Décaler, Déplacer, Copier) en jaune #FFFF00 (0.3.7).
 - Thème clair légèrement assombri (au lieu du blanc pur) (0.3.8) ; fond du dessin #E8E8F0, bandeaux #F1F1F7, fond général #DCDCE6 (0.3.9) ; encore assombri : dessin #D8D8E2, bandeaux #E2E2EA, fond général #CBCBD7, grille et axes un peu plus marqués (0.3.10).
 
+## Étape 4 : fichiers et réglages (0.4.0)
+
+- **Fenêtre Fichiers** (bouton vert du centre) : nom de l'esquisse en cours (« modifiée » s'il y a des changements non enregistrés), Nouvelle esquisse, Enregistrer, Charger, Importer DXF, Exporter DXF, Exporter PDF, Exporter image.
+- **Sauvegarde automatique** inchangée : l'esquisse en cours est gardée à chaque modification et reprise à la réouverture, avec son lien vers l'esquisse enregistrée.
+- **Enregistrer** : donne un nom (proposé : « Esquisse du jj/mm/aaaa hhhmm »). Une esquisse déjà enregistrée est mise à jour (changer le nom la renomme) ou copiée (« Enregistrer une copie »). Un nom déjà pris par une autre esquisse : proposition de la remplacer.
+- **Charger** : liste des esquisses enregistrées (miniature, nom, date), de la plus récente à la plus ancienne ; toucher pour ouvrir, crayon pour renommer, corbeille pour supprimer (avec confirmation). Supprimer l'esquisse ouverte la laisse à l'écran, non enregistrée.
+- Ouvrir une esquisse ou en commencer une nouvelle alors que l'esquisse en cours a des modifications non enregistrées : proposition de l'enregistrer d'abord, de continuer sans enregistrer, ou d'annuler. L'historique annuler / rétablir repart de zéro à l'ouverture.
+- **Exporter DXF** : lignes, cercles et arcs en vraie grandeur, dans l'unité choisie dans les réglages (en-tête `$INSUNITS`), format ASCII R12 lu par tous les logiciels de CAO. La construction (lignes, lignes infinies, cercles et arcs de construction), les cotes, les relations et les points ne sont pas exportés, ni ce qui est masqué avec le bouton œil.
+- **Importer DXF** : lignes, cercles, arcs, polylignes (LWPOLYLINE, POLYLINE, avec leurs arrondis), ajoutés à l'esquisse en cours comme entités indépendantes, sans relations ; la vue se cadre dessus ; annulable. Unité lue dans le fichier (sinon celle des réglages). Textes, hachures, blocs, cotes du fichier sont ignorés (le message les compte).
+- **Exporter PDF** : A4 vectoriel (paysage ou portrait selon l'esquisse), fond blanc, traits noirs, cotes, cadré automatiquement, avec une ligne de pied (nom, unité des cotes, date). **Exporter image** : PNG de 3200 px de côté, fond blanc. Sans grille, axes, points, icônes de relations ni construction ; ce qui est masqué avec le bouton œil n'est pas exporté.
+- Les exports ouvrent la **feuille de partage iOS** (Enregistrer dans Fichiers, AirDrop, Mail…), sinon un téléchargement.
+- **Réglages** complets : unité de longueur (mm, cm, m, pouce, pied, yard ; liste), précision des fractions (1/8 à 1/64, utile en pouce / pied / yard), unité d'angle (degrés, radians), couleurs d'état par thème (sélecteur de couleur pour sous-contrainte, entièrement contrainte, sur-contrainte, et « Couleurs par défaut »), en plus de ce qui existait (thème, barre d'outils, appui long, tracé, favoris, réinitialisation). Un exemple montre l'affichage choisi (ex. 5 1/4"). Changer d'unité ne modifie pas la géométrie.
+
 ## Tester sur ordinateur
 
 ```sh
@@ -134,9 +147,9 @@ tous les fichiers sont alors en cache.
 
 ## Organisation du code
 
-- `js/core/` : modèle géométrique, requêtes, historique, unités, calculatrice, solveur (couche indépendante)
-- `js/render/` : fenêtre de vue, rendu Canvas, mise en page des cotes et icônes de relations
-- `js/ui/` : gestes, barre d'outils, bandeau, relations, clavier calculatrice, fenêtres, réglages, outils
+- `js/core/` : modèle géométrique, requêtes, historique, unités, calculatrice, solveur (couche indépendante), affichage (bouton œil), DXF (`dxf.js`), PDF vectoriel sans bibliothèque (`pdf.js` : contexte façon Canvas qui écrit du PDF)
+- `js/render/` : fenêtre de vue, rendu Canvas, mise en page des cotes et icônes de relations, rendu d'export (`exporter.js` : PNG, PDF, miniatures avec le même rendu que l'écran)
+- `js/ui/` : gestes, barre d'outils, bandeau, relations, clavier calculatrice, fenêtres, réglages, outils, fichiers (`files.js`), fenêtre modale (`dialog.js`)
 - `js/store/` : IndexedDB et réglages
 - `sw.js` : cache hors ligne. À chaque version, changer `CACHE` et tenir `ASSETS` à jour.
 

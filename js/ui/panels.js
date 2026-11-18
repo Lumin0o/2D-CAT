@@ -1,7 +1,7 @@
 // Fenêtres « Aimantation et grille », « Affichage » et « Fichiers ».
 import { popoverItem, popoverTitle, switchRow } from './popover.js';
 import { icon } from './icons.js';
-import { showToast } from './toast.js';
+import { saveDialog, newSketch, importDXFFile, exportDXFFile, exportPDFFile, exportPNGFile } from './files.js';
 import { VIS_TYPES, DEFAULT_VISIBILITY } from '../core/visibility.js';
 
 /** Types d'aimantation, dans l'ordre de la fenêtre (clé de settings.snapTypes, libellé). */
@@ -81,19 +81,25 @@ export function openVisibilityPopover(app, anchor) {
 }
 
 export function openFilesPopover(app, anchor) {
-  const later = (n) => () => showToast(`Disponible à l'étape ${n}`);
   app.popovers.toggle({
-    anchor, side: 'above', width: 240,
+    anchor, side: 'above', width: 250,
     build: (el) => {
+      const close = () => app.popovers.close();
+      const name = app.project ? app.project.name : 'Esquisse non enregistrée';
       el.appendChild(popoverTitle('Fichiers'));
-      el.appendChild(popoverItem({ icon: icon('select'), label: 'Nouvelle esquisse', onTap: () => { app.popovers.close(); app.newSketch(); } }));
+      const cur = document.createElement('div');
+      cur.className = 'popover-note files-current';
+      cur.textContent = name + (app.project && app.isDirty() ? ' · modifiée' : '');
+      el.appendChild(cur);
+      el.appendChild(popoverItem({ icon: icon('select'), label: 'Nouvelle esquisse', onTap: () => { close(); newSketch(app); } }));
       el.appendChild(document.createElement('div')).className = 'popover-sep';
-      el.appendChild(popoverItem({ icon: icon('save'), label: 'Enregistrer', disabled: true, onTap: later(4) }));
-      el.appendChild(popoverItem({ icon: icon('open'), label: 'Charger', disabled: true, onTap: later(4) }));
-      el.appendChild(popoverItem({ icon: icon('import'), label: 'Importer DXF', disabled: true, onTap: later(4) }));
-      el.appendChild(popoverItem({ icon: icon('export'), label: 'Exporter DXF', disabled: true, onTap: later(4) }));
-      el.appendChild(popoverItem({ icon: icon('pdf'), label: 'Exporter PDF', disabled: true, onTap: later(4) }));
-      el.appendChild(popoverItem({ icon: icon('image'), label: 'Exporter image', disabled: true, onTap: later(4) }));
+      el.appendChild(popoverItem({ icon: icon('save'), label: 'Enregistrer', onTap: () => { close(); saveDialog(app); } }));
+      el.appendChild(popoverItem({ icon: icon('open'), label: 'Charger', onTap: () => { close(); app.projectsPanel.open(); } }));
+      el.appendChild(document.createElement('div')).className = 'popover-sep';
+      el.appendChild(popoverItem({ icon: icon('import'), label: 'Importer DXF', onTap: () => { close(); importDXFFile(app); } }));
+      el.appendChild(popoverItem({ icon: icon('export'), label: 'Exporter DXF', onTap: () => { close(); exportDXFFile(app); } }));
+      el.appendChild(popoverItem({ icon: icon('pdf'), label: 'Exporter PDF', onTap: () => { close(); exportPDFFile(app); } }));
+      el.appendChild(popoverItem({ icon: icon('image'), label: 'Exporter image', onTap: () => { close(); exportPNGFile(app); } }));
     },
   });
 }

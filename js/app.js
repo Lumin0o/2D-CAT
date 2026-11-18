@@ -17,6 +17,7 @@ import { PopoverManager } from './ui/popover.js';
 import { showToast } from './ui/toast.js';
 import { openSnapPopover, openFilesPopover, openVisibilityPopover } from './ui/panels.js';
 import { hiddenItems, hiddenCount } from './core/visibility.js';
+import { ProjectsPanel, sketchHash } from './ui/files.js';
 import { SettingsPanel } from './ui/settingsPanel.js';
 import { Keypad } from './ui/keypad.js';
 import { RelationBar } from './ui/relations.js';
@@ -80,6 +81,9 @@ export class App {
     if (cur && cur.sketch) {
       try { this.sketch = Sketch.fromJSON(cur.sketch); } catch (err) { console.warn('Esquisse illisible', err); this.sketch = new Sketch(); }
     }
+    // esquisse enregistrée en cours (Fichiers › Enregistrer) et empreinte de sa dernière version enregistrée
+    this.project = cur && cur.project && cur.project.id ? { id: cur.project.id, name: cur.project.name } : null;
+    this.savedHash = cur && cur.savedHash ? cur.savedHash : null;
     this.sketch.cleanupDegenerate();
     solve(this.sketch);
     this._seqMark = this.sketch.seq;
@@ -96,6 +100,7 @@ export class App {
     this.infobar = new InfoBar(this, { main: $('info-main'), extra: $('info-extra'), del: $('btn-delete'), state: $('info-state') });
     this.relbar = new RelationBar(this, $('relbar'));
     this.settingsPanel = new SettingsPanel(this, this.els.settingsPanel);
+    this.projectsPanel = new ProjectsPanel(this);
 
     this.els.undo.innerHTML = icon('undo');
     this.els.redo.innerHTML = icon('redo');
@@ -177,6 +182,8 @@ export class App {
     this._loadFailed = false;
     if (cur && cur.sketch && !this.history.canUndo() && this.sketch.isEmpty()) {
       try { this.sketch = Sketch.fromJSON(cur.sketch); } catch (err) { return; }
+      this.project = cur.project && cur.project.id ? { id: cur.project.id, name: cur.project.name } : null;
+      this.savedHash = cur.savedHash || null;
       this.sketch.cleanupDegenerate();
       solve(this.sketch);
       this._seqMark = this.sketch.seq;
@@ -468,15 +475,40 @@ export class App {
   }
   saveNow() {
     if (this._loadFailed && this.sketch.isEmpty()) return Promise.resolve();   // ne pas écraser l'esquisse non relue
-    return db.set('current', { sketch: this.sketch.toJSON(), viewport: this.vp.toJSON(), toolId: this.toolId, savedAt: Date.now() });
+    return db.set('current', {
+      sketch: this.sketch.toJSON(), viewport: this.vp.toJSON(), toolId: this.toolId, savedAt: Date.now(),
+      project: this.project, savedHash: this.savedHash,
+    });
   }
-  newSketch() {
-    if (this.sketch.isEmpty()) return;
-    this.sketch = new Sketch();
+  /** Esquisse enregistrée liée (ou null) ; serial : version qui vient d'être enregistrée ou ouverte. */
+  setProject(project, serial = null) {
+    this.project = project ? { id: project.id, name: project.name } : null;
+    if (serial !== null) this.savedHash = sketchHash(serial);
+    if (!project) this.savedHash = null;
+    this.saveNow();
+    this.refreshUI();
+  }
+  /** Modifications non enregistrées : depuis le dernier enregistrement, ou une esquisse jamais enregistrée et non vide. */
+  isDirty() {
+    if (!this.project) return !this.sketch.isEmpty();
+    return sketchHash(this.sketch.serialize()) !== this.savedHash;
+  }
+  /** Remplace l'esquisse (ouverture, nouvelle) : historique remis à zéro, vue cadrée ou restaurée. */
+  loadSketch(sk, { viewport = null, project = null } = {}) {
+    if (this.tool) this.setTool(null);
+    this.drag = null; this.box = null;
+    sk.cleanupDegenerate();
+    solve(sk);
+    this.sketch = sk;
+    this._seqMark = sk.seq;
+    const serial = sk.serialize();
+    this.history.init(serial);
     this.selection.clear();
-    if (this.tool) this.tool.reset();
-    this.commit('Nouvelle esquisse');
-    showToast('Nouvelle esquisse (annulable)');
+    this.project = project ? { id: project.id, name: project.name } : null;
+    this.savedHash = project ? sketchHash(serial) : null;
+    if (viewport) this.vp.fromJSON(viewport); else if (!sk.isEmpty()) this.vp.fit(sk.bbox(), 56); else this.vp.fit(null);
+    this.afterChange();
+    this.saveNow();
   }
 
   // ---------- Outils ----------
@@ -1216,6 +1248,8 @@ export class App {
 
   onKey(e) {
     if (this.settingsPanel.open_ || this.keypad.isOpen()) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;   // saisie d'un nom
+    if (document.querySelector('.dialog-layer') || (this.projectsPanel && this.projectsPanel.isOpen)) return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); this.deleteSelection(); }

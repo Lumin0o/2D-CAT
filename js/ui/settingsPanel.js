@@ -1,8 +1,11 @@
-// Panneau Réglages (plein écran) : thème, barre d'outils, tracé, favoris, appui long, réinitialisation.
+// Panneau Réglages (plein écran) : thème, barre d'outils, tracé, favoris, appui long, unités, couleurs, réinitialisation.
 import { GROUPS, describeFavorite } from './tools/registry.js';
 import { icon } from './icons.js';
 import { popoverItem, popoverTitle } from './popover.js';
-import { fmtNumber } from '../core/units.js';
+import { fmtNumber, fmtLength, fmtAngle, UNITS } from '../core/units.js';
+import { DEFAULT_SETTINGS } from '../store/settings.js';
+
+const UNIT_NAMES = { mm: 'Millimètre (mm)', cm: 'Centimètre (cm)', m: 'Mètre (m)', inch: 'Pouce (")', ft: 'Pied (\')', yd: 'Yard (vg)' };
 import { APP_VERSION } from '../version.js';
 
 /** L'app est-elle entièrement en cache pour fonctionner sans réseau ? */
@@ -108,10 +111,59 @@ export class SettingsPanel {
     }
     body.appendChild(card);
 
-    // --- Autres réglages (étapes suivantes) ---
-    body.appendChild(title('Unités et couleurs'));
+    // --- Unités ---
+    body.appendChild(title('Unités'));
     card = document.createElement('div'); card.className = 'card';
-    card.appendChild(row('Unités, fractions, angles, couleurs d\'état', textValue('Étape 4')));
+    const unitBtn = document.createElement('button');
+    unitBtn.className = 'row';
+    const U = UNITS[s.get('unit')] || UNITS.mm;
+    unitBtn.innerHTML = `<span class="row-label">Unité de longueur</span><span class="row-value">${UNIT_NAMES[s.get('unit')] || 'mm'}<span class="chev">${icon('chevronRight')}</span></span>`;
+    unitBtn.addEventListener('click', (e) => { e.preventDefault(); this.chooseUnit(unitBtn); });
+    card.appendChild(unitBtn);
+    const frac = row('Précision des fractions', segmented([[8, '1/8'], [16, '1/16'], [32, '1/32'], [64, '1/64']], s.get('fractionDenominator'), (v) => { s.set('fractionDenominator', v); this.render(); }));
+    if (!U.imperial) frac.classList.add('dim-row');
+    card.appendChild(frac);
+    card.appendChild(row('Unité d\'angle', segmented([['deg', 'Degrés'], ['rad', 'Radians']], s.get('angleUnit'), (v) => { s.set('angleUnit', v); this.render(); })));
+    const ex = document.createElement('div'); ex.className = 'row-note';
+    const sample = 133.35;     // 5 1/4 pouces
+    ex.textContent = `Exemple : ${fmtLength(sample, s.data)} · ${fmtAngle(Math.PI / 6, s.data)}` + (U.imperial ? ' · les fractions s\'arrondissent au 1/' + s.get('fractionDenominator') : ' · la géométrie ne change pas, seul l\'affichage change');
+    card.appendChild(ex);
+    body.appendChild(card);
+
+    // --- Couleurs d'état ---
+    body.appendChild(title('Couleurs d\'état'));
+    card = document.createElement('div'); card.className = 'card';
+    const themeKey = this.colorTheme || s.resolvedTheme();
+    card.appendChild(row('Thème', segmented([['light', 'Clair'], ['dark', 'Sombre']], themeKey, (v) => { this.colorTheme = v; this.render(); })));
+    const cols = s.get('colors')[themeKey] || DEFAULT_SETTINGS.colors[themeKey];
+    for (const [key, label] of [['under', 'Sous-contrainte'], ['full', 'Entièrement contrainte'], ['over', 'Sur-contrainte']]) {
+      const r = document.createElement('label');
+      r.className = 'row color-row';
+      r.innerHTML = `<span class="row-label">${label}</span><span class="color-swatch" style="background:${cols[key]}"></span>`;
+      const inp = document.createElement('input');
+      inp.type = 'color';
+      inp.value = cols[key];
+      inp.className = 'color-input';
+      inp.addEventListener('input', () => {
+        const all = JSON.parse(JSON.stringify(s.get('colors')));
+        all[themeKey] = { ...all[themeKey], [key]: inp.value };
+        s.set('colors', all);
+        r.querySelector('.color-swatch').style.background = inp.value;
+      });
+      r.appendChild(inp);
+      card.appendChild(r);
+    }
+    const resetC = document.createElement('button');
+    resetC.className = 'row button';
+    resetC.textContent = 'Couleurs par défaut';
+    resetC.addEventListener('click', (e) => {
+      e.preventDefault();
+      const all = JSON.parse(JSON.stringify(s.get('colors')));
+      all[themeKey] = { ...DEFAULT_SETTINGS.colors[themeKey] };
+      s.set('colors', all);
+      this.render();
+    });
+    card.appendChild(resetC);
     body.appendChild(card);
 
     // --- Réinitialiser ---
@@ -126,13 +178,28 @@ export class SettingsPanel {
 
     body.appendChild(title('À propos'));
     card = document.createElement('div'); card.className = 'card';
-    card.appendChild(row('Esquisse 2D', textValue(`Version ${APP_VERSION} · étape 3`)));
+    card.appendChild(row('Esquisse 2D', textValue(`Version ${APP_VERSION} · étape 4`)));
     const off = textValue('Vérification…');
     card.appendChild(row('Hors ligne', off));
     offlineStatus().then((t) => { off.textContent = t; });
     body.appendChild(card);
   }
 
+  chooseUnit(anchor) {
+    const s = this.app.settings;
+    this.app.popovers.open({
+      anchor, side: 'below', width: 240,
+      build: (el) => {
+        el.appendChild(popoverTitle('Unité de longueur'));
+        for (const [k, label] of Object.entries(UNIT_NAMES)) {
+          el.appendChild(popoverItem({
+            label, sub: UNITS[k].imperial ? 'Affichage en fractions' : 'Affichage décimal', active: s.get('unit') === k,
+            onTap: () => { s.set('unit', k); this.app.popovers.close(); this.render(); },
+          }));
+        }
+      },
+    });
+  }
   chooseFavorite(anchor, index) {
     const s = this.app.settings;
     const current = s.get('favorites')[index];
