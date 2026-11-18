@@ -22,9 +22,19 @@ export const DEFAULT_SETTINGS = {
     light: { under: '#1f6fe5', full: '#111111', over: '#e0241c' },
     dark:  { under: '#6db3ff', full: '#f2f2f0', over: '#ff453a' },
   },
-  snap: true,
+  snap: true,                 // interrupteur général « Aimant » : sans lui, aucun des types ci-dessous n'agit
+  snapTypes: {                // types d'aimantation et relations automatiques correspondantes
+    points: true,             // extrémités, centres, origine → coïncidence (point partagé)
+    midpoints: true,          // milieux → point milieu
+    quadrants: true,          // quadrants des cercles → coïncidente
+    intersections: true,      // intersections → coïncidentes
+    onEntity: true,           // sur une entité → coïncidente
+    horizontal: true,         // ligne presque horizontale → redressée + horizontale
+    vertical: true,           // ligne presque verticale → redressée + verticale
+    tangent: true,            // arc dans le prolongement → tangente
+  },
   grid: false,
-  gridSnap: true,             // aimantation à la grille (active seulement si la grille est affichée)
+  gridSnap: true,             // aimantation à la grille (si l'aimant est actif et la grille affichée)
   lastTools: {},              // groupId -> toolId (dernier outil utilisé du groupe)
 };
 

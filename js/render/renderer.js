@@ -62,6 +62,14 @@ export class Renderer {
     this.ctx.font = `13px ${FONT}`;
     return { w: this.ctx.measureText(label).width + 10, h: 20 };
   }
+  /** Centre écran du texte d'une cote ; cote ordinale : décalé juste après la ligne du 0, vers l'extérieur. */
+  dimTextCenter(lay, label) {
+    const t = this.vp.toScreen(lay.text);
+    if (!lay.textOut) return t;
+    this.ctx.font = `13px ${FONT}`;
+    const s = this.ctx.measureText(label).width / 2 + 8;
+    return { x: t.x + lay.textOut.x * s, y: t.y - lay.textOut.y * s };
+  }
 
   draw(st) {
     const { ctx, vp } = this;
@@ -206,7 +214,7 @@ export class Renderer {
     }
     // texte sur fond
     const label = dimLabel(sk, k, st.settings);
-    const t = vp.toScreen(lay.text);
+    const t = this.dimTextCenter(lay, label);
     ctx.font = `13px ${FONT}`;
     const w = ctx.measureText(label).width + 8;
     ctx.save();

@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.4.
+Étapes 1 et 2 sur 4 terminées (base, contraintes et cotes). Version 0.2.5.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -34,6 +34,11 @@
 - Rangée du bas : icônes seules ; nouveau bouton Grille (marche / arrêt) à droite de l'Aimantation. La fenêtre Aimantation garde « Aimant » et « Aimanter à la grille ».
 - Grille : gris sombre en thème sombre, gris clair en thème clair.
 - Réglages › Tracé › Poser les points : Touchers (un toucher par point), Glisser (glisser-lâcher du premier au deuxième point ; le troisième éventuel au toucher) ou Les deux. En glisser-lâcher, la ligne trace un seul segment.
+
+## Retours iPhone intégrés (0.2.5)
+
+- Cotes ordinales : flèches comme les cotes normales. Sur la ligne de la cote 0, un trait relie chaque cote à la précédente (du même côté du 0) avec une flèche sur sa ligne d'attache ; la première a une flèche à chaque bout (0 ↔ cote). La valeur est placée juste après ce trait.
+- Fenêtre Aimantation : sous « Aimant », un interrupteur par type (extrémités et centres, milieux, quadrants, intersections, sur les entités, horizontale, verticale, tangence des arcs, grille). Couper un type coupe aussi la relation automatique correspondante. Quand « Aimant » est coupé, tous les types sont grisés et inactifs, grille comprise ; « Grille » est aussi grisé tant que la grille est masquée.
 
 ## Tester sur ordinateur
 

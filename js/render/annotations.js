@@ -174,17 +174,42 @@ export function dimLayout(sk, k) {
 }
 
 /**
- * Cote ordinale : une ligne d'attache du point jusqu'à la ligne de la cote 0, et la valeur au bout.
+ * Cote ordinale : une ligne d'attache du point jusqu'à la ligne de la cote 0, puis la valeur juste après.
  * axis 'h' : mesure en X, valeurs alignées horizontalement (texte vertical, comme SOLIDWORKS) ;
  * axis 'v' : mesure en Y, valeurs alignées verticalement.
+ * Sur la ligne de la cote 0, un trait de cote relie chaque cote à la précédente (du même côté du 0),
+ * avec une flèche sur sa ligne d'attache ; la première cote a une flèche à chaque bout (0 ↔ cote).
+ * textOut : sens (monde) du décalage du texte vers l'extérieur, appliqué en pixels au rendu.
  */
 function ordinateLayout(sk, k) {
   const zero = k.type === 'ordZero' ? k : sk.constraints.get(k.ord);
   if (!zero || !zero.pos) return null;
-  const T = P(sk, k.type === 'ordZero' ? k.refs[0] : k.refs[1]);
-  if (!T) return null;
-  const L = zero.axis === 'h' ? { x: T.x, y: zero.pos.y } : { x: zero.pos.x, y: T.y };
-  return { segs: [], ext: [[T, L]], arrows: [], arc: null, text: L, rot: zero.axis === 'h' };
+  const B = P(sk, zero.refs[0]);
+  const T = k.type === 'ordZero' ? B : P(sk, k.refs[1]);
+  if (!T || !B) return null;
+  const h = zero.axis === 'h';
+  const L = h ? { x: T.x, y: zero.pos.y } : { x: zero.pos.x, y: T.y };
+  const sgn = (h ? zero.pos.y - B.y : zero.pos.x - B.x) >= 0 ? 1 : -1;
+  const lay = { segs: [], ext: [[T, L]], arrows: [], arc: null, text: L, rot: h, textOut: h ? { x: 0, y: sgn } : { x: sgn, y: 0 } };
+  if (k.type === 'ordZero') return lay;
+  const c = (v) => (h ? v.x : v.y);
+  const c0 = c(B), ct = c(T), side = Math.sign(ct - c0);
+  if (!side) return lay;
+  // cote précédente du même côté du 0 (la plus proche entre le 0 et celle-ci)
+  let prev = c0;
+  for (const o of sk.constraints.values()) {
+    if (o.ord !== zero.id || o === k) continue;
+    const q = P(sk, o.refs[1]);
+    if (!q) continue;
+    const cq = c(q);
+    if ((cq - prev) * side > 0 && (ct - cq) * side > 1e-9) prev = cq;
+  }
+  const at = (v) => (h ? { x: v, y: zero.pos.y } : { x: zero.pos.x, y: v });
+  const dir = h ? { x: side, y: 0 } : { x: 0, y: side };
+  lay.segs.push([at(prev), L]);
+  lay.arrows.push({ p: L, dir });
+  if (prev === c0) lay.arrows.push({ p: at(c0), dir: mul(dir, -1) });
+  return lay;
 }
 
 // ---------- Icônes de relations ----------

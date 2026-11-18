@@ -9,7 +9,7 @@ import { Viewport } from './render/viewport.js';
 import { Renderer, BADGE_R } from './render/renderer.js';
 import { dimLayout, dimLabel, dimMeasure, layoutBadges } from './render/annotations.js';
 import { db } from './store/db.js';
-import { Settings, applyTheme } from './store/settings.js';
+import { Settings, applyTheme, DEFAULT_SETTINGS } from './store/settings.js';
 import { Gestures } from './ui/gestures.js';
 import { Toolbar } from './ui/toolbar.js';
 import { InfoBar } from './ui/infobar.js';
@@ -196,15 +196,16 @@ export class App {
   snap(wp, opt = {}) {
     const sk = this.sketch;
     const tol = this.vp.pxToWorld(SNAP_PX);
+    const T = this.snapTypes();
     if (this.settings.get('snap')) {
       let best = null;
-      for (const p of sk.points.values()) {
+      if (T.points) for (const p of sk.points.values()) {
         if (opt.excludePoints && opt.excludePoints.has(p.id)) continue;
         const d = dist(p, wp);
         if (d <= tol && (!best || d < best.d)) best = { d, p };
       }
       if (best) return { x: best.p.x, y: best.p.y, pointId: best.p.id, kind: best.p.origin ? 'origin' : 'point' };
-      if (!opt.pointsOnly) {
+      if (!opt.pointsOnly && (T.intersections || T.midpoints || T.quadrants || T.onEntity)) {
         const near = [];
         for (const e of sk.entities.values()) {
           if (opt.excludeEntities && opt.excludeEntities.has(e.id)) continue;
@@ -214,7 +215,7 @@ export class App {
         near.sort((a, b) => a.d - b.d);
         near.length = Math.min(near.length, 6);
         let bi = null;
-        for (let i = 0; i < near.length; i++) for (let j = i + 1; j < near.length; j++) {
+        if (T.intersections) for (let i = 0; i < near.length; i++) for (let j = i + 1; j < near.length; j++) {
           for (const p of entityIntersections(sk, near[i].e, near[j].e)) {
             const d = dist(p, wp);
             if (d <= tol && (!bi || d < bi.d)) bi = { d, p, ids: [near[i].e.id, near[j].e.id] };
@@ -223,11 +224,12 @@ export class App {
         if (bi) return { x: bi.p.x, y: bi.p.y, kind: 'intersection', entityIds: bi.ids };
         let bk = null;
         for (const { e } of near) for (const kp of keyPoints(sk, e)) {
+          if (!(kp.kind === 'midpoint' ? T.midpoints : T.quadrants)) continue;
           const d = dist(kp, wp);
           if (d <= tol * 0.8 && (!bk || d < bk.d)) bk = { d, kp, e };
         }
         if (bk) return { x: bk.kp.x, y: bk.kp.y, kind: bk.kp.kind, entityId: bk.e.id };
-        if (near.length) { const c = closestOnEntity(sk, near[0].e, wp); return { x: c.x, y: c.y, kind: 'on', entityId: near[0].e.id }; }
+        if (near.length && T.onEntity) { const c = closestOnEntity(sk, near[0].e, wp); return { x: c.x, y: c.y, kind: 'on', entityId: near[0].e.id }; }
       }
     }
     if (this.gridSnapOn()) {
@@ -241,12 +243,13 @@ export class App {
   autoAlign(a, b) {
     const out = { ...b, align: null };
     if (!this.settings.get('snap') || b.pointId || (b.kind && b.kind !== 'grid')) return out;
+    const T = this.snapTypes();
     const dx = b.x - a.x, dy = b.y - a.y;
     if (Math.hypot(dx, dy) < this.vp.pxToWorld(HIT_PX)) return out;
     const tolRad = ALIGN_DEG * Math.PI / 180;
     const ang = Math.abs(Math.atan2(dy, dx));
-    if (ang < tolRad || Math.PI - ang < tolRad) { out.y = a.y; out.align = 'h'; }
-    else if (Math.abs(ang - Math.PI / 2) < tolRad) { out.x = a.x; out.align = 'v'; }
+    if (T.horizontal && (ang < tolRad || Math.PI - ang < tolRad)) { out.y = a.y; out.align = 'h'; }
+    else if (T.vertical && Math.abs(ang - Math.PI / 2) < tolRad) { out.x = a.x; out.align = 'v'; }
     return out;
   }
 
@@ -266,8 +269,10 @@ export class App {
   gridInfo() { return this.renderer.gridInfo((UNITS[this.settings.get('unit')] || UNITS.mm).factor); }
   /** Pas d'aimantation de la grille (mm) : celui des lignes bien visibles. */
   gridStep() { return this.gridInfo().snap; }
-  /** Aimantation à la grille : seulement si la grille est affichée et son interrupteur actif. */
-  gridSnapOn() { return !!(this.settings.get('grid') && this.settings.get('gridSnap')); }
+  /** Aimantation à la grille : seulement si l'aimant est actif, la grille affichée et son interrupteur actif. */
+  gridSnapOn() { return !!(this.settings.get('snap') && this.settings.get('grid') && this.settings.get('gridSnap')); }
+  /** Types d'aimantation actifs (chacun a son interrupteur dans la fenêtre Aimantation). */
+  snapTypes() { return { ...DEFAULT_SETTINGS.snapTypes, ...(this.settings.get('snapTypes') || {}) }; }
 
   // ---------- Couleurs ----------
   colors() {
@@ -468,8 +473,9 @@ export class App {
       if (!isAnnotation(k)) continue;
       const lay = dimLayout(sk, k);
       if (!lay) continue;
-      const t = this.vp.toScreen(lay.text);
-      const size = this.renderer.dimTextSize(dimLabel(sk, k, this.settings.data));
+      const label = dimLabel(sk, k, this.settings.data);
+      const t = this.renderer.dimTextCenter(lay, label);
+      const size = this.renderer.dimTextSize(label);
       const [hw, hh] = lay.rot ? [size.h / 2, size.w / 2] : [size.w / 2, size.h / 2];
       if (Math.abs(s.x - t.x) <= hw + 5 && Math.abs(s.y - t.y) <= hh + 5) return { type: 'dim', id: k.id };
     }

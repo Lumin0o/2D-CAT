@@ -94,7 +94,7 @@ export class Tool {
    * ajoute la relation tangente (comme SOLIDWORKS).
    */
   autoTangentArc(arc) {
-    if (!this.tc.settings.snap) return;
+    if (!this.tc.settings.snap || (this.tc.settings.snapTypes && this.tc.settings.snapTypes.tangent === false)) return;
     const sk = this.tc.sketch;
     const c = sk.points.get(arc.c);
     for (const [pid, leaving] of [[arc.s, true], [arc.e, false]]) {
