@@ -587,8 +587,10 @@ export class App {
       const label = dimLabel(sk, k, this.settings.data);
       const t = this.renderer.dimTextCenter(lay, label);
       const size = this.renderer.dimTextSize(label);
-      const [hw, hh] = lay.rot ? [size.h / 2, size.w / 2] : [size.w / 2, size.h / 2];
-      if (Math.abs(s.x - t.x) <= hw + 5 && Math.abs(s.y - t.y) <= hh + 5) return { type: 'dim', id: k.id };
+      // texte éventuellement tourné (cotes ordinales) : test dans le repère du texte
+      const r = lay.rot || 0, dx = s.x - t.x, dy = s.y - t.y;
+      const lx = dx * Math.cos(r) + dy * Math.sin(r), ly = -dx * Math.sin(r) + dy * Math.cos(r);
+      if (Math.abs(lx) <= size.w / 2 + 5 && Math.abs(ly) <= size.h / 2 + 5) return { type: 'dim', id: k.id };
     }
     let bb = null;
     for (const b of layoutBadges(sk, this.vp)) {
@@ -823,7 +825,8 @@ export class App {
       const label = dimLabel(sk, k, this.settings.data);
       const t = this.renderer.dimTextCenter(lay, label);
       const size = this.renderer.dimTextSize(label);
-      const [hw, hh] = lay.rot ? [size.h / 2, size.w / 2] : [size.w / 2, size.h / 2];
+      const r = lay.rot || 0, co = Math.abs(Math.cos(r)), si = Math.abs(Math.sin(r));
+      const hw = co * size.w / 2 + si * size.h / 2, hh = si * size.w / 2 + co * size.h / 2;
       const inside = t.x - hw >= a.x && t.x + hw <= b.x && t.y - hh >= a.y && t.y + hh <= b.y;
       const touch = t.x + hw >= a.x && t.x - hw <= b.x && t.y + hh >= a.y && t.y - hh <= b.y;
       if (box.crossing ? touch : inside) hit.add(k.id);
@@ -1099,7 +1102,17 @@ export class App {
         for (const id of [k.refs[0], L.p1, L.p2]) w.set(id, HEAVY);
         break;
       }
+      case 'dimAlong': {
+        // le point passe de l'autre côté de la référence, le long de la ligne
+        const L = sk.entities.get(k.refs[2]);
+        const [o, p] = [P(k.refs[0]), P(k.refs[1])];
+        const u = norm(sub(P(L.p2), P(L.p1)));
+        Object.assign(p, add(p, mul(u, -2 * dot(sub(p, o), u))));
+        for (const id of [k.refs[0], k.refs[1], L.p1, L.p2]) w.set(id, HEAVY);
+        break;
+      }
       case 'dimLineLine': {
+        if (this.flipOffsetGroup(k, w)) break;
         const A = sk.entities.get(k.refs[0]), B = sk.entities.get(k.refs[1]);
         const a = P(A.p1), b = P(A.p2);
         const n = perp(norm(sub(b, a)));
@@ -1112,6 +1125,38 @@ export class App {
     }
     for (const id of [...w.keys()]) { const pt = P(id); if (pt && pt.origin) w.delete(id); }
     return w;
+  }
+  /**
+   * Cote d'un décalage verrouillé (outil Décaler, « Ajouter une cote ») : tout le contour décalé passe de l'autre
+   * côté de l'original, pas seulement la ligne cotée. Chaque point de la copie est renvoyé de l'autre côté du
+   * point d'origine qui lui correspond (exact pour les lignes et les arcs concentriques), puis le solveur ajuste.
+   * @returns {boolean} true si la cote verrouille un décalage (poids remplis dans w).
+   */
+  flipOffsetGroup(k, w) {
+    const sk = this.sketch;
+    const pairs = [[k.refs[0], k.refs[1]]];
+    for (const q of sk.constraints.values()) {
+      if (q.type === 'offsetEq' && q.refs[0] === k.refs[0] && q.refs[1] === k.refs[1]) pairs.push([q.refs[2], q.refs[3]]);
+    }
+    if (pairs.length < 2) return false;
+    const map = new Map();            // point de la copie → point d'origine
+    const orig = new Set();
+    for (const [oid, nid] of pairs) {
+      const o = sk.entities.get(oid), n = sk.entities.get(nid);
+      if (!o || !n || o.type !== n.type) continue;
+      const keys = o.type === 'line' ? ['p1', 'p2'] : o.type === 'arc' ? ['s', 'e'] : [];
+      for (const key of keys) { if (!map.has(n[key])) map.set(n[key], o[key]); orig.add(o[key]); }
+      if (o.type === 'circle') n.r = Math.max(2 * o.r - n.r, 1e-6);
+      for (const pid of sk.entityPointIds(o)) w.set(pid, HEAVY);
+    }
+    for (const [nid, oid] of map) {
+      if (orig.has(nid)) continue;    // point commun à l'original et à la copie : il reste en place
+      const q = sk.points.get(nid), o = sk.points.get(oid);
+      if (!q || !o) continue;
+      q.x = 2 * o.x - q.x; q.y = 2 * o.y - q.y;
+      w.set(nid, HEAVY);
+    }
+    return true;
   }
   /** Modification impossible : rien n'est appliqué, l'élément passe en rouge avec un message. */
   failEdit(before, ids) {

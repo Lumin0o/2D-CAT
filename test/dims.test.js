@@ -114,5 +114,43 @@ const near = (a, b, e = 1e-6) => Math.abs(a - b) < e;
   ok(analyze(sk).entities.get(l.id) === 'over', 'cote horizontale en conflit : la ligne est rouge');
 }
 
+// cote ordinale parallèle à une ligne inclinée (dimAlong) : mesure, solveur, inversion, mise en page
+{
+  const sk = new Sketch();
+  const a = sk.addPoint(0, 0), b = sk.addPoint(40, 30);        // ligne à 36,87° (direction 0,8 ; 0,6)
+  const L = sk.addLine(a.id, b.id);
+  a.fixed = true; b.fixed = true;                                // la ligne ne bouge pas
+  const q = sk.addPoint(10, 20);
+  const z = sk.addConstraint('ordZero', [a.id, L.id], { axis: 'a', pos: { x: 3, y: -4 } });
+  const k = sk.addConstraint('dimAlong', [a.id, q.id, L.id], { ord: z.id, pos: null });
+  k.value = dimMeasure(sk, k);
+  ok(near(k.value, 20), 'mesure le long de la ligne : 10×0,8 + 20×0,6 = 20');
+  k.value = 30;
+  ok(solve(sk).ok && near(dimMeasure(sk, k), 30), 'cote parallèle modifiée à 30');
+  const lay = dimLayout(sk, k);
+  // ligne de cote : parallèle à la ligne, passant par la position de la cote 0 (côté opposé à q)
+  const u = { x: 0.8, y: 0.6 };
+  const foot = lay.ext[0][1];
+  ok(lay && near((foot.x - 3) * u.y - (foot.y + 4) * u.x, 0, 1e-6), 'pied de la ligne d\'attache sur la ligne de la cote 0');
+  ok(near(lay.textOut.x * u.x + lay.textOut.y * u.y, 0) && lay.rot !== 0, 'texte le long de la ligne d\'attache (tourné)');
+  const zl = dimLayout(sk, z);
+  ok(zl && near(zl.ext[0][1].x, 3) && near(zl.ext[0][1].y, -4), 'cote 0 au pied de la référence');
+  // inversion (comme l'app) : le point passe de l'autre côté de la référence, la valeur est gardée
+  const pq = sk.points.get(q.id);
+  const t = pq.x * u.x + pq.y * u.y;
+  pq.x -= 2 * t * u.x; pq.y -= 2 * t * u.y;
+  ok(solve(sk).ok && near(dimMeasure(sk, k), 30) && pq.x * u.x + pq.y * u.y < 0, 'cote parallèle inversée');
+  // cotes ordinales horizontales : rendu inchangé (texte vertical)
+  const z2 = sk.addConstraint('ordZero', [a.id], { axis: 'h', pos: { x: 0, y: 50 } });
+  const lh = dimLayout(sk, z2);
+  ok(near(lh.rot, -Math.PI / 2) && near(lh.textOut.y, 1), 'cote 0 horizontale : texte vertical, vers le haut');
+  const z3 = sk.addConstraint('ordZero', [a.id], { axis: 'v', pos: { x: -20, y: 0 } });
+  const lv = dimLayout(sk, z3);
+  ok(lv.rot === 0 && near(lv.textOut.x, -1), 'cote 0 verticale : texte horizontal, vers la gauche');
+  sk.removeEntity(L.id);
+  sk.cleanupDegenerate();
+  ok(!sk.constraints.has(z.id) && !sk.constraints.has(k.id), 'ligne supprimée : cote 0 parallèle et ses cotes supprimées');
+}
+
 print(fails ? `${fails} ÉCHEC(S)` : 'TOUS LES TESTS PASSENT');
 if (fails) throw new Error('tests');

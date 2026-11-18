@@ -61,6 +61,7 @@ export function dimMeasure(sk, k) {
     case 'dimLineLine': { const a = P(sk, A.p1), b = P(sk, A.p2); return (k.sym ? 2 : 1) * Math.abs(cross(sub(P(sk, B.p1), a), norm(sub(b, a)))); }
     case 'dimAngle': { const { r1, r2 } = angleRays(sk, k); return Math.abs(Math.atan2(cross(r1, r2), dot(r1, r2))); }
     case 'dimRadius': return curveOf(sk, A).r;
+    case 'dimAlong': { const L = sk.entities.get(k.refs[2]); if (!L) return 0; return Math.abs(dot(sub(P(sk, k.refs[1]), P(sk, k.refs[0])), norm(sub(P(sk, L.p2), P(sk, L.p1))))); }
     default: return 0;
   }
 }
@@ -188,25 +189,47 @@ export function dimLayout(sk, k) {
 }
 
 /**
+ * Direction de mesure d'une cote 0 : X (axis 'h'), Y (axis 'v') ou le long d'une ligne (axis 'a', refs[1]).
+ * Orientée vers la droite (ou vers le haut) pour garder un sens stable.
+ */
+export function ordAxis(sk, zero) {
+  if (zero.axis === 'h') return { x: 1, y: 0 };
+  if (zero.axis === 'v') return { x: 0, y: 1 };
+  const L = sk.entities.get(zero.refs[1]);
+  if (!L || L.type !== 'line') return null;
+  const u = norm(sub(P(sk, L.p2), P(sk, L.p1)));
+  if (u.x === 0 && u.y === 0) return null;
+  return u.x < -1e-12 || (Math.abs(u.x) <= 1e-12 && u.y < 0) ? mul(u, -1) : u;
+}
+
+/**
  * Cote ordinale : une ligne d'attache du point jusqu'à la ligne de la cote 0, puis la valeur juste après.
  * axis 'h' : mesure en X, valeurs alignées horizontalement (texte vertical, comme SOLIDWORKS) ;
- * axis 'v' : mesure en Y, valeurs alignées verticalement.
+ * axis 'v' : mesure en Y, valeurs alignées verticalement ;
+ * axis 'a' : mesure le long d'une ligne, valeurs alignées parallèlement à elle (texte le long des lignes d'attache).
  * Sur la ligne de la cote 0, un trait de cote relie chaque cote à la précédente (du même côté du 0),
  * avec une flèche sur sa ligne d'attache ; la première cote a une flèche à chaque bout (0 ↔ cote).
- * textOut : sens (monde) du décalage du texte vers l'extérieur, appliqué en pixels au rendu.
+ * textOut : sens (monde) du décalage du texte vers l'extérieur, appliqué en pixels au rendu ;
+ * rot : rotation (écran, radians) du texte.
  */
 function ordinateLayout(sk, k) {
   const zero = k.type === 'ordZero' ? k : sk.constraints.get(k.ord);
   if (!zero || !zero.pos) return null;
   const B = P(sk, zero.refs[0]);
   const T = k.type === 'ordZero' ? B : P(sk, k.refs[1]);
-  if (!T || !B) return null;
-  const h = zero.axis === 'h';
-  const L = h ? { x: T.x, y: zero.pos.y } : { x: zero.pos.x, y: T.y };
-  const sgn = (h ? zero.pos.y - B.y : zero.pos.x - B.x) >= 0 ? 1 : -1;
-  const lay = { segs: [], ext: [[T, L]], arrows: [], arc: null, text: L, rot: h, textOut: h ? { x: 0, y: sgn } : { x: sgn, y: 0 } };
+  const u = ordAxis(sk, zero);
+  if (!T || !B || !u) return null;
+  const n = perp(u);
+  const sgn = dot(sub(zero.pos, B), n) >= 0 ? 1 : -1;
+  const L = add(T, mul(n, dot(sub(zero.pos, T), n)));
+  const out = mul(n, sgn);
+  // texte le long de la ligne d'attache, toujours lisible (jamais à l'envers)
+  let rot = Math.atan2(-out.y, out.x);
+  if (rot >= Math.PI / 2 - 1e-9) rot -= Math.PI; else if (rot < -Math.PI / 2 - 1e-9) rot += Math.PI;
+  if (Math.abs(rot) < 1e-9) rot = 0;
+  const lay = { segs: [], ext: [[T, L]], arrows: [], arc: null, text: L, rot, textOut: out };
   if (k.type === 'ordZero') return lay;
-  const c = (v) => (h ? v.x : v.y);
+  const c = (v) => dot(v, u);
   const c0 = c(B), ct = c(T), side = Math.sign(ct - c0);
   if (!side) return lay;
   // cote précédente du même côté du 0 (la plus proche entre le 0 et celle-ci)
@@ -218,8 +241,9 @@ function ordinateLayout(sk, k) {
     const cq = c(q);
     if ((cq - prev) * side > 0 && (ct - cq) * side > 1e-9) prev = cq;
   }
-  const at = (v) => (h ? { x: v, y: zero.pos.y } : { x: zero.pos.x, y: v });
-  const dir = h ? { x: side, y: 0 } : { x: 0, y: side };
+  const z0 = c(zero.pos);
+  const at = (v) => add(zero.pos, mul(u, v - z0));
+  const dir = mul(u, side);
   lay.segs.push([at(prev), L]);
   lay.arrows.push({ p: L, dir });
   if (prev === c0) lay.arrows.push({ p: at(c0), dir: mul(dir, -1) });

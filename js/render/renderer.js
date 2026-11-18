@@ -233,7 +233,7 @@ export class Renderer {
     const w = ctx.measureText(label).width + 8;
     ctx.save();
     ctx.translate(t.x, t.y);
-    if (lay.rot) ctx.rotate(-Math.PI / 2);      // cote ordinale horizontale : texte vertical
+    if (lay.rot) ctx.rotate(lay.rot);      // cote ordinale : texte le long de sa ligne d'attache
     ctx.fillStyle = st.colors.canvasBg;
     ctx.fillRect(-w / 2, -9, w, 18);
     ctx.fillStyle = color;

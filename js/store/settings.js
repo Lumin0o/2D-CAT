@@ -37,7 +37,8 @@ export const DEFAULT_SETTINGS = {
   gridSnap: true,             // aimantation à la grille (si l'aimant est actif et la grille affichée)
   lastTools: {},              // groupId -> toolId (dernier outil utilisé du groupe)
   recentGroup: null,          // dernier groupe utilisé hors des cases fixes : affiché dans la dernière case
-  offsetOpts: { chain: true, dim: false, construction: false },   // options de l'outil Décaler
+  offsetOpts: { chain: true, dim: true, construction: false },    // options de l'outil Décaler
+  rev: 1,                     // révision des réglages enregistrés (migrations)
 };
 
 function deepMerge(base, over) {
@@ -60,7 +61,12 @@ export class Settings {
   }
   async load() {
     const saved = await db.get('settings');
-    if (saved) this.data = deepMerge(DEFAULT_SETTINGS, saved);
+    if (saved) {
+      this.data = deepMerge(DEFAULT_SETTINGS, saved);
+      // 0.3.3 : « Ajouter une cote » de l'outil Décaler devient actif par défaut
+      if (!(saved.rev >= 1)) this.data.offsetOpts = { ...this.data.offsetOpts, dim: true };
+      this.data.rev = DEFAULT_SETTINGS.rev;
+    }
     // Garantit 2 × 8 favoris
     const fav = this.data.favorites.slice(0, 2 * MAX_CELLS);
     while (fav.length < 2 * MAX_CELLS) fav.push(DEFAULT_FAVORITES[fav.length]);

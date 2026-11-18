@@ -9,7 +9,8 @@
 //   Les cotes sont des contraintes avec une valeur et une position d'affichage.
 //   Cotes ordinales : une cote 0 { type: 'ordZero', refs: [point de référence], axis: 'h'|'v', pos }
 //   (sans équation) et des cotes horizontales / verticales { refs: [référence, point], ord: id de la cote 0 },
-//   alignées sur la cote 0.
+//   alignées sur la cote 0. Parallèles à une ligne : cote 0 { refs: [référence, ligne], axis: 'a' } et
+//   cotes { type: 'dimAlong', refs: [référence, point, ligne], ord } (distance projetée sur la ligne).
 import { dist, arcBBox } from './geom.js';
 
 export const ORIGIN_ID = 'origin';

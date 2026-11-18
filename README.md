@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.2.
+Étapes 1, 2 et 3 sur 4 terminées (base, contraintes et cotes, outils complémentaires). Version 0.3.3.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -77,7 +77,7 @@
 - **Cote symétrique** : une cote entre un élément et une ligne de construction, placée de l'autre côté de cette ligne, vaut deux fois la distance (comme le diamètre de SOLIDWORKS). Elle est dessinée de l'élément à son image.
 - **Valider** prend la place de la corbeille (les deux ne sont jamais visibles en même temps : l'outil reprend la sélection). En plein écran, il rejoint les autres actions sous l'indication.
 - Miroir : après le choix de l'axe, aperçu de la copie puis **Valider** ; toucher une autre ligne change l'axe.
-- Décaler : petite fenêtre d'options sous la barre d'outils (gardées dans les réglages) : **Sélectionner la chaîne** (entités reliées bout à bout, sans les lignes de construction), **Ajouter une cote** (cote de la distance + relations « décalage identique » D : tout le contour suit la cote ; pour un cercle ou des arcs seuls, cote de rayon de la copie), **Construction**.
+- Décaler : petite fenêtre d'options sous la barre d'outils (gardées dans les réglages) : **Sélectionner la chaîne** (entités reliées bout à bout, sans les lignes de construction), **Ajouter une cote** (active par défaut ; cote de la distance + relations « décalage identique » D : tout le contour suit la cote ; pour un cercle ou des arcs seuls, cote de rayon de la copie), **Construction**.
 - Barre réduite : la dernière case affiche le dernier groupe utilisé qui n'a pas déjà sa case (réglages : « Case n · Dernier groupe utilisé »).
 - Glisser un point sur une entité (ligne, cercle, arc, milieu, intersection) l'y aimante ; au lâcher, il devient coïncident (ou point milieu), comme pendant le tracé.
 
@@ -91,6 +91,13 @@
 - Aperçus de Symétrie, Décaler, Déplacer et Copier en jaune.
 - Les icônes de relations ne se posent plus sur une entité, un point ou une autre icône.
 - L'outil Miroir s'appelle maintenant **Symétrie**.
+
+## Retours iPhone intégrés (0.3.3)
+
+- Décaler : « Ajouter une cote » est active par défaut.
+- Décaler : inverser la cote d'un décalage (⇅ au clavier) fait passer **tout le contour décalé** de l'autre côté de l'original, pas seulement la ligne cotée.
+- **Cotation ordinale parallèle à une ligne** : si on touche une ligne inclinée comme référence (ou un point, puis une ligne), les cotes peuvent être parallèles à cette ligne (distances mesurées le long de la ligne) ou horizontales / verticales : deux boutons sous l'indication, « Parallèles à la ligne » par défaut.
+- Bandeau d'infos : le type de l'élément sélectionné est indiqué (ligne, ligne de construction, ligne infinie, cercle, arc, point, centre, point d'esquisse, origine, type de cote) ; pour plusieurs éléments, le détail (« 2 lignes · 1 cercle »).
 
 ## Tester sur ordinateur
 

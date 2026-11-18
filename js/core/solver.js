@@ -4,7 +4,7 @@
 // L'analyse (degrés de liberté, redondances) se fait par orthogonalisation des lignes
 // de la jacobienne.
 
-const DIM_TYPES = new Set(['dimLength', 'dimDistance', 'dimHorizontal', 'dimVertical', 'dimPointLine', 'dimLineLine', 'dimAngle', 'dimRadius']);
+const DIM_TYPES = new Set(['dimLength', 'dimDistance', 'dimHorizontal', 'dimVertical', 'dimPointLine', 'dimLineLine', 'dimAngle', 'dimRadius', 'dimAlong']);
 export const isDimension = (k) => DIM_TYPES.has(k.type);
 /** Cotes affichées sur le dessin : les cotes, plus la cote 0 des cotes ordinales (sans équation). */
 export const isAnnotation = (k) => DIM_TYPES.has(k.type) || k.type === 'ordZero';
@@ -199,6 +199,18 @@ export function buildSystem(sk) {
         const C = k.type === 'dimHorizontal' ? X : Y;
         const sgn = C(r[1]) - C(r[0]) < 0 ? -1 : 1;     // sens actuel (inversable)
         add(k.id, [r[0], r[1]], [], () => sgn * (C(r[1]) - C(r[0])) - k.value);
+        break;
+      }
+      case 'dimAlong': {
+        // cote ordinale parallèle à une ligne : distance de la référence au point, projetée sur la ligne
+        const L = ent(r[2]);
+        if (!(P0 && P1) || !isLine(L)) break;
+        const proj = () => {
+          const ux = X(L.p2) - X(L.p1), uy = Y(L.p2) - Y(L.p1), l = Math.hypot(ux, uy) || 1;
+          return ((X(r[1]) - X(r[0])) * ux + (Y(r[1]) - Y(r[0])) * uy) / l;
+        };
+        const sgn = proj() < 0 ? -1 : 1;     // sens actuel (inversable)
+        add(k.id, [r[0], r[1], L.p1, L.p2], [], () => sgn * proj() - k.value);
         break;
       }
       case 'dimPointLine':

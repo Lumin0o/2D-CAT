@@ -185,7 +185,7 @@ export class OffsetTool extends PickTool {
     if (ids.length) this.setSource(ids);
   }
   /** Options (petite fenêtre sous la barre d'outils), gardées dans les réglages. */
-  get opts() { return { chain: true, dim: false, construction: false, ...(this.tc.settings.offsetOpts || {}) }; }
+  get opts() { return { chain: true, dim: true, construction: false, ...(this.tc.settings.offsetOpts || {}) }; }
   options() {
     const o = this.opts;
     const set = (key) => (v) => {

@@ -263,20 +263,43 @@ export class DimChainTool extends DimensionTool {
  * Cotation ordinale (comme SOLIDWORKS) : on touche l'élément de référence (sommet, ligne, arc…),
  * puis un tap dans le vide place la cote 0 : au-dessus / en dessous → cotes en X alignées
  * horizontalement ; à gauche / à droite → cotes en Y alignées verticalement.
+ * Si une ligne inclinée est touchée (comme référence, ou après un point de référence), les cotes peuvent
+ * aussi être parallèles à cette ligne (mesure le long de la ligne) : choix par les boutons sous l'indication.
  * Chaque élément touché ensuite reçoit sa cote depuis la référence, alignée sur la cote 0.
  * Tap dans le vide : fin.
  */
 export class DimOrdinateTool extends DimensionTool {
-  reset() { this.base = null; this.zero = null; super.reset(); }
+  reset() { this.base = null; this.zero = null; this.dirLine = null; this.parallel = true; super.reset(); }
   onActivate() { this.reset(); }
+  /** Ligne de direction utilisable pour des cotes parallèles (inclinée : ni horizontale ni verticale). */
+  get slanted() {
+    const sk = this.tc.sketch;
+    const L = this.dirLine && sk.entities.get(this.dirLine);
+    if (!L || L.type !== 'line') return false;
+    const a = sk.points.get(L.p1), b = sk.points.get(L.p2);
+    const u = norm(sub(b, a));
+    return Math.abs(u.x) > 1e-6 && Math.abs(u.y) > 1e-6;
+  }
+  get alongLine() { return this.parallel && this.slanted; }
   hint() {
     if (this.zero) return 'Touchez les éléments à coter · tap dans le vide : fin';
+    if (this.base && this.alongLine) return 'Touchez dans le vide pour placer la cote 0 (cotes parallèles à la ligne)';
+    if (this.base && !this.slanted) return 'Touchez dans le vide pour placer la cote 0 · une ligne inclinée : cotes parallèles à elle';
     if (this.base) return 'Touchez dans le vide pour placer la cote 0';
     return 'Cote ordinale : touchez l\'élément de référence (cote 0)';
+  }
+  actions() {
+    if (!this.base || this.zero || !this.slanted) return [];
+    const pick = (v) => () => { this.parallel = v; this.updateHint(); this.tc.requestDraw(); };
+    return [
+      { label: 'Parallèles à la ligne', glyph: '//', cls: this.parallel ? 'on' : 'off', run: pick(true) },
+      { label: 'Horizontales / verticales', glyph: '+', cls: this.parallel ? 'off' : 'on', run: pick(false) },
+    ];
   }
   zeroAt(pos) {
     const B = this.tc.sketch.points.get(this.base);
     if (!B) return null;
+    if (this.alongLine) return { type: 'ordZero', refs: [this.base, this.dirLine], axis: 'a', pos: { x: pos.x, y: pos.y } };
     const axis = Math.abs(pos.y - B.y) >= Math.abs(pos.x - B.x) ? 'h' : 'v';
     return { type: 'ordZero', refs: [this.base], axis, pos: { x: pos.x, y: pos.y } };
   }
@@ -284,17 +307,32 @@ export class DimOrdinateTool extends DimensionTool {
     const sk = this.tc.sketch;
     const zero = sk.constraints.get(this.zero);
     if (!zero || pid === this.base) return null;
-    const c = forcedDim(sk, 'PP', [this.base, pid], zero.axis);
-    if (!c) return null;
-    const k = { type: c.type, refs: c.refs, ord: this.zero };
+    let k;
+    if (zero.axis === 'a') {
+      k = { type: 'dimAlong', refs: [this.base, pid, zero.refs[1]], ord: this.zero };
+      const B = sk.points.get(this.base);
+      if (dimMeasure(sk, k) < 1e-9 * Math.max(1, Math.abs(B.x) + Math.abs(B.y))) return null;
+    } else {
+      const c = forcedDim(sk, 'PP', [this.base, pid], zero.axis);
+      if (!c) return null;
+      k = { type: c.type, refs: c.refs, ord: this.zero };
+    }
     k.value = dimMeasure(sk, k);
     return k;
   }
-  setBase(pid) { this.base = pid; this.highlight = new Set([pid]); this.updateHint(); }
+  setBase(pid) { this.base = pid; this.updateHighlight(); this.updateHint(); }
+  updateHighlight() { this.highlight = new Set([this.base, this.dirLine].filter(Boolean)); }
+  /** Élément touché : un point (ou centre), ou une ligne. */
+  pickAt(wp) {
+    const hit = this.tc.hitGeometry(wp);
+    if (!hit) return null;
+    const e = this.tc.sketch.entities.get(hit.id);
+    return { pid: this.pointAt(wp), line: e && e.type === 'line' ? e.id : null };
+  }
   track(wp) {
     this.cursor = { x: wp.x, y: wp.y, kind: null };
     const sk = this.tc.sketch;
-    if (this.zero && !sk.constraints.has(this.zero)) { this.zero = null; this.base = null; this.highlight = new Set(); }
+    if (this.zero && !sk.constraints.has(this.zero)) this.reset();
     if (this.zero) { const pid = this.pointAt(wp); this.previewDim = pid ? this.ordDim(pid) : null; }
     else if (this.base) this.previewDim = this.tc.hitGeometry(wp) ? null : this.zeroAt(wp);
     else this.previewDim = null;
@@ -305,26 +343,40 @@ export class DimOrdinateTool extends DimensionTool {
     const sk = this.tc.sketch;
     if (this.zero && !sk.constraints.has(this.zero)) this.reset();     // cote 0 annulée ou supprimée
     if (this.base && !sk.points.has(this.base)) this.reset();
-    const pid = this.pointAt(wp);
+    if (this.dirLine && !sk.entities.has(this.dirLine)) this.dirLine = null;
     if (this.zero) {
-      if (!pid) { this.reset(); this.tc.requestDraw(); return; }
+      const pid = this.pointAt(wp);
+      if (!pid) { this.reset(); this.tc.refreshUI(); return; }
       const k = this.ordDim(pid);
       if (k) { this.highlight = new Set([this.base, pid]); this.tc.createDimension(k, 'Cote ordinale'); }
-      else if (pid !== this.base) this.tc.toast(sk.constraints.get(this.zero).axis === 'h' ? 'Même position en X que la cote 0' : 'Même position en Y que la cote 0');
-      this.updateHint();
-    } else if (pid) this.setBase(pid);
-    else if (this.base) {
-      const z = this.zeroAt(wp);
-      if (z) {
-        const id = this.tc.createDimension(z, 'Cote ordinale 0');
-        if (id) { this.zero = id; this.highlight = new Set([this.base]); }
+      else if (pid !== this.base) {
+        const ax = sk.constraints.get(this.zero).axis;
+        this.tc.toast(ax === 'h' ? 'Même position en X que la cote 0' : ax === 'v' ? 'Même position en Y que la cote 0' : 'Même position le long de la ligne que la cote 0');
       }
       this.updateHint();
+    } else {
+      const got = this.pickAt(wp);
+      if (got && got.line && this.base && got.line !== this.dirLine) {
+        // référence déjà choisie : la ligne touchée donne la direction des cotes
+        this.dirLine = got.line;
+        this.parallel = true;
+        this.updateHighlight(); this.updateHint();
+      } else if (got && got.pid) {
+        if (got.line) { this.dirLine = got.line; this.parallel = true; }
+        this.setBase(got.pid);
+      } else if (this.base) {
+        const z = this.zeroAt(wp);
+        if (z) {
+          const id = this.tc.createDimension(z, 'Cote ordinale 0');
+          if (id) { this.zero = id; this.highlight = new Set([this.base]); }
+        }
+        this.updateHint();
+      }
     }
-    this.tc.requestDraw();
+    this.tc.refreshUI();
   }
   onToolbarTap() {
-    if (this.base || this.zero) { this.reset(); this.tc.requestDraw(); return true; }
+    if (this.base || this.zero) { this.reset(); this.tc.refreshUI(); return true; }
     return false;
   }
 }
