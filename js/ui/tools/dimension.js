@@ -263,43 +263,45 @@ export class DimChainTool extends DimensionTool {
  * Cotation ordinale (comme SOLIDWORKS) : on touche l'élément de référence (sommet, ligne, arc…),
  * puis un tap dans le vide place la cote 0 : au-dessus / en dessous → cotes en X alignées
  * horizontalement ; à gauche / à droite → cotes en Y alignées verticalement.
- * Si une ligne inclinée est touchée (comme référence, ou après un point de référence), les cotes peuvent
- * aussi être parallèles à cette ligne (mesure le long de la ligne) : choix par les boutons sous l'indication.
+ * Avec une ligne inclinée (touchée comme référence, ou après un point de référence), c'est comme la cotation
+ * intelligente : selon l'endroit où glisse le doigt, les cotes sont horizontales, verticales ou parallèles à la
+ * ligne (mesure le long de la ligne).
  * Chaque élément touché ensuite reçoit sa cote depuis la référence, alignée sur la cote 0.
  * Tap dans le vide : fin.
  */
 export class DimOrdinateTool extends DimensionTool {
-  reset() { this.base = null; this.zero = null; this.dirLine = null; this.parallel = true; super.reset(); }
+  reset() { this.base = null; this.zero = null; this.dirLine = null; super.reset(); }
   onActivate() { this.reset(); }
-  /** Ligne de direction utilisable pour des cotes parallèles (inclinée : ni horizontale ni verticale). */
-  get slanted() {
+  /** Ligne de direction inclinée (ni horizontale ni verticale), ou null. */
+  get slantedLine() {
     const sk = this.tc.sketch;
     const L = this.dirLine && sk.entities.get(this.dirLine);
-    if (!L || L.type !== 'line') return false;
-    const a = sk.points.get(L.p1), b = sk.points.get(L.p2);
-    const u = norm(sub(b, a));
-    return Math.abs(u.x) > 1e-6 && Math.abs(u.y) > 1e-6;
+    if (!L || L.type !== 'line') return null;
+    const u = norm(sub(sk.points.get(L.p2), sk.points.get(L.p1)));
+    return Math.abs(u.x) > 1e-6 && Math.abs(u.y) > 1e-6 ? L : null;
   }
-  get alongLine() { return this.parallel && this.slanted; }
   hint() {
     if (this.zero) return 'Touchez les éléments à coter · tap dans le vide : fin';
-    if (this.base && this.alongLine) return 'Touchez dans le vide pour placer la cote 0 (cotes parallèles à la ligne)';
-    if (this.base && !this.slanted) return 'Touchez dans le vide pour placer la cote 0 · une ligne inclinée : cotes parallèles à elle';
-    if (this.base) return 'Touchez dans le vide pour placer la cote 0';
+    if (this.base && this.slantedLine) return 'Glissez pour choisir des cotes horizontales, verticales ou parallèles à la ligne';
+    if (this.base) return 'Touchez dans le vide pour placer la cote 0 · une ligne inclinée : cotes parallèles possibles';
     return 'Cote ordinale : touchez l\'élément de référence (cote 0)';
   }
-  actions() {
-    if (!this.base || this.zero || !this.slanted) return [];
-    const pick = (v) => () => { this.parallel = v; this.updateHint(); this.tc.requestDraw(); };
-    return [
-      { label: 'Parallèles à la ligne', glyph: '//', cls: this.parallel ? 'on' : 'off', run: pick(true) },
-      { label: 'Horizontales / verticales', glyph: '+', cls: this.parallel ? 'off' : 'on', run: pick(false) },
-    ];
-  }
+  /**
+   * Orientation de la cote 0 selon l'endroit du doigt. Ligne inclinée : comme une cote intelligente sur cette
+   * ligne (la zone comprend aussi la référence) ; sinon, horizontale ou verticale selon l'écart dominant.
+   */
   zeroAt(pos) {
-    const B = this.tc.sketch.points.get(this.base);
+    const sk = this.tc.sketch;
+    const B = sk.points.get(this.base);
     if (!B) return null;
-    if (this.alongLine) return { type: 'ordZero', refs: [this.base, this.dirLine], axis: 'a', pos: { x: pos.x, y: pos.y } };
+    const L = this.slantedLine;
+    if (L) {
+      const a = sk.points.get(L.p1), b = sk.points.get(L.p2);
+      const minX = Math.min(a.x, b.x, B.x), maxX = Math.max(a.x, b.x, B.x), minY = Math.min(a.y, b.y, B.y), maxY = Math.max(a.y, b.y, B.y);
+      const o = dimOrientation({ x: minX, y: minY }, { x: maxX, y: maxY }, pos);
+      if (o === 'aligned') return { type: 'ordZero', refs: [this.base, L.id], axis: 'a', pos: { x: pos.x, y: pos.y } };
+      return { type: 'ordZero', refs: [this.base], axis: o, pos: { x: pos.x, y: pos.y } };
+    }
     const axis = Math.abs(pos.y - B.y) >= Math.abs(pos.x - B.x) ? 'h' : 'v';
     return { type: 'ordZero', refs: [this.base], axis, pos: { x: pos.x, y: pos.y } };
   }
@@ -359,10 +361,9 @@ export class DimOrdinateTool extends DimensionTool {
       if (got && got.line && this.base && got.line !== this.dirLine) {
         // référence déjà choisie : la ligne touchée donne la direction des cotes
         this.dirLine = got.line;
-        this.parallel = true;
         this.updateHighlight(); this.updateHint();
       } else if (got && got.pid) {
-        if (got.line) { this.dirLine = got.line; this.parallel = true; }
+        if (got.line) this.dirLine = got.line;
         this.setBase(got.pid);
       } else if (this.base) {
         const z = this.zeroAt(wp);
