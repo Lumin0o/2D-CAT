@@ -1,20 +1,21 @@
 /* ===== Thème ===== */
 :root {
-  --bg: #f2f2f7;
-  --surface: #ffffff;
-  --surface2: #e9e9ee;
+  /* thème clair légèrement assombri (0.3.8) : le blanc pur fatiguait les yeux */
+  --bg: #e2e2e7;
+  --surface: #f0f0f3;
+  --surface2: #dcdce1;
   --text: #111111;
-  --text2: #6e6e73;
+  --text2: #66666b;
   --accent: #0a84ff;
   --green: #30b14e;
   --red: #e5342b;
-  --border: #d1d1d6;
-  --canvas-bg: #ffffff;
+  --border: #c6c6cc;
+  --canvas-bg: #e9e9ec;
   --grid-paper: #b4b8c0;
   --grid-alpha: 1;
   --axis: #a8a8ae;
   --shadow: 0 8px 28px rgba(0,0,0,.22);
-  --overlay-btn: rgba(255,255,255,.88);
+  --overlay-btn: rgba(242,242,245,.9);
   --hint-bg: rgba(40,40,48,.78);
   color-scheme: light;
 }

@@ -112,5 +112,5 @@ export function applyTheme(settings) {
   if (t === 'auto') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', t);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = settings.resolvedTheme() === 'dark' ? '#000000' : '#f2f2f7';
+  if (meta) meta.content = settings.resolvedTheme() === 'dark' ? '#000000' : '#e2e2e7';
 }

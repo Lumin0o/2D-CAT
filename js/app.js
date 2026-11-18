@@ -338,7 +338,7 @@ export class App {
       badgeBg: dark ? '#1f3d29' : '#d6f2dd',
       badgeFg: dark ? '#7ee29a' : '#1c7a35',
       loupeRing: dark ? '#f2f2f0' : '#3c3c43',
-      canvasBg: v('--canvas-bg') || (dark ? '#121214' : '#ffffff'),
+      canvasBg: v('--canvas-bg') || (dark ? '#121214' : '#e9e9ec'),
       gridPaper: v('--grid-paper') || '#c8763a',
       gridAlpha: parseFloat(v('--grid-alpha')) || 0.8,
       axis: v('--axis') || '#a8a8ae',
