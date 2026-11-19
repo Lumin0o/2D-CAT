@@ -37,7 +37,8 @@ export function shareFile(bytesOrBlob, filename, types) {
       let ok = false;
       try { ok = navigator.canShare({ files: [file] }); } catch (err) { ok = false; }
       if (!ok) continue;
-      return navigator.share({ files: [file], title: filename }).then(() => true, (err) => {
+      // sans titre ni texte : iOS ajouterait sinon un fichier texte au partage
+      return navigator.share({ files: [file] }).then(() => true, (err) => {
         if (err && err.name === 'AbortError') return false;      // partage annulé
         download(bytesOrBlob, filename, list[0]);
         return true;
@@ -73,7 +74,7 @@ function exportView(app) {
   const bbox = exportBBox(sk, H);
   return { sk, H, bbox };
 }
-const nothing = () => showToast('Rien à exporter : l\'esquisse est vide (la construction n\'est pas exportée)', { error: true, ms: 3000 });
+const nothing = () => showToast('Rien à exporter : l\'esquisse est vide (ou tout est masqué)', { error: true, ms: 3000 });
 
 export function exportDXFFile(app) {
   const unit = app.settings.get('unit');
@@ -169,10 +170,39 @@ export function importDXFText(app, text, name = 'DXF') {
 }
 
 // ---------- Esquisses enregistrées ----------
+/** Nom libre : « Esquisse 19/11 », sinon « Esquisse 19/11 (2) », (3)… */
+function uniqueName(base, list) {
+  const taken = new Set(list.map((p) => p.name.toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let i = 2; ; i++) if (!taken.has(`${base} (${i})`.toLowerCase())) return `${base} (${i})`;
+}
+/** Liste des esquisses enregistrées, dans la fenêtre Enregistrer : toucher un nom le reprend (pour la remplacer). */
+function savedList(list, currentId, onPick) {
+  const box = document.createElement('div');
+  box.className = 'save-list';
+  const t = document.createElement('div');
+  t.className = 'save-list-title';
+  t.textContent = list.length ? `Esquisses enregistrées (${list.length})` : 'Aucune esquisse enregistrée';
+  box.appendChild(t);
+  if (!list.length) return box;
+  const ul = document.createElement('div');
+  ul.className = 'save-list-items';
+  for (const p of list) {
+    const b = document.createElement('button');
+    b.className = 'save-list-item' + (p.id === currentId ? ' current' : '');
+    b.innerHTML = `<span class="project-thumb small">${p.thumb ? `<img alt="" src="${p.thumb}">` : ''}</span><span class="project-txt"><span class="project-name"></span><span class="project-date">${fmtDate(p.updatedAt)}${p.id === currentId ? ' · ouverte' : ''}</span></span>`;
+    b.querySelector('.project-name').textContent = p.name;
+    b.addEventListener('click', (e) => { e.preventDefault(); onPick(p.name); });
+    ul.appendChild(b);
+  }
+  box.appendChild(ul);
+  return box;
+}
+
 /** Miniature (PNG, fond transparent, traits gris lisibles en clair comme en sombre). */
 export function thumbnail(app, sk = app.sketch) {
   try {
-    const H = exportHidden(sk, null, { dims: false });
+    const H = exportHidden(sk, null, { dims: false, construction: false });
     const bbox = exportBBox(sk, H);
     const w = 120, h = 84, dpr = 2;
     const canvas = document.createElement('canvas');
@@ -208,17 +238,20 @@ export async function saveDialog(app) {
   const buttons = [{ label: 'Enregistrer', value: 'save', style: 'primary' }];
   if (linked) buttons.push({ label: 'Enregistrer une copie', value: 'copy' });
   buttons.push({ label: 'Annuler', value: 'cancel', style: 'cancel' });
+  const saved = await db.listProjects();
+  let input = null;
   const r = await showDialog({
     title: linked ? 'Enregistrer l\'esquisse' : 'Enregistrer sous',
     message: linked ? 'Modifiez le nom pour la renommer.' : 'Nom de l\'esquisse :',
-    input: { value: linked ? app.project.name : defaultName(), placeholder: 'Nom de l\'esquisse' },
+    input: { value: linked ? app.project.name : uniqueName(defaultName(), saved), placeholder: 'Nom de l\'esquisse' },
     buttons,
+    extra: savedList(saved, app.project ? app.project.id : null, (name) => { if (input) { input.value = name; input.dispatchEvent(new Event('input')); } }),
+    onInput: (el) => { input = el; },
   });
   if (r.button === 'cancel' || !r.value) return false;
   const copy = r.button === 'copy';
   // même nom qu'une autre esquisse enregistrée : la remplacer ?
-  const all = await db.listProjects();
-  const same = all.find((p) => p.name.toLowerCase() === r.value.toLowerCase() && !(app.project && !copy && p.id === app.project.id));
+  const same = saved.find((p) => p.name.toLowerCase() === r.value.toLowerCase() && !(app.project && !copy && p.id === app.project.id));
   let replaceId = null;
   if (same) {
     const c = await showDialog({

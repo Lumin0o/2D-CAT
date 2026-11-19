@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS = {
   lastTools: {},              // groupId -> toolId (dernier outil utilisé du groupe)
   recentGroup: null,          // dernier groupe utilisé hors des cases fixes : affiché dans la dernière case
   offsetOpts: { chain: true, dim: true, construction: false },    // options de l'outil Décaler
+  patternOpts: { link: true, dim: true },                          // options des répétitions
   visibility: { ...DEFAULT_VISIBILITY },  // affichage (bouton œil) : types d'éléments visibles sur le dessin
   rev: 1,                     // révision des réglages enregistrés (migrations)
 };

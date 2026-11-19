@@ -133,8 +133,7 @@ export class SettingsPanel {
     // --- Couleurs d'état ---
     body.appendChild(title('Couleurs d\'état'));
     card = document.createElement('div'); card.className = 'card';
-    const themeKey = this.colorTheme || s.resolvedTheme();
-    card.appendChild(row('Thème', segmented([['light', 'Clair'], ['dark', 'Sombre']], themeKey, (v) => { this.colorTheme = v; this.render(); })));
+    const themeKey = s.resolvedTheme();      // couleurs du thème affiché
     const cols = s.get('colors')[themeKey] || DEFAULT_SETTINGS.colors[themeKey];
     for (const [key, label] of [['under', 'Sous-contrainte'], ['full', 'Entièrement contrainte'], ['over', 'Sur-contrainte']]) {
       const r = document.createElement('label');

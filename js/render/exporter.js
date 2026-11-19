@@ -1,5 +1,5 @@
 // Rendu pour l'export (PNG, PDF) et les miniatures : le même rendu que l'écran, sur fond blanc,
-// cadré automatiquement, sans grille, axes, points ni icônes de relations, et sans la construction.
+// cadré automatiquement, sans grille, axes, points ni icônes de relations.
 import { Renderer } from './renderer.js';
 import { Viewport } from './viewport.js';
 import { dimLayout } from './annotations.js';
@@ -15,12 +15,13 @@ export const PRINT_COLORS = {
 };
 
 /**
- * Ce qui n'est pas exporté : la construction (et les lignes infinies), les points (sauf les points d'esquisse),
- * les relations, plus ce que l'utilisateur a masqué (bouton œil).
+ * Ce qui n'est pas exporté : les points (sauf les points d'esquisse), les relations, et ce que l'utilisateur a masqué
+ * (bouton œil). La construction est exportée (en tirets) ; pour l'enlever, on la masque.
+ * construction : false pour l'exclure (miniatures).
  */
-export function exportHidden(sk, userHidden = null, { dims = true } = {}) {
+export function exportHidden(sk, userHidden = null, { dims = true, construction = true } = {}) {
   const ents = new Set(), pts = new Set(), cons = new Set();
-  for (const e of sk.entities.values()) if (e.construction || e.infinite || (userHidden && userHidden.ents.has(e.id))) ents.add(e.id);
+  for (const e of sk.entities.values()) if ((!construction && (e.construction || e.infinite)) || (userHidden && userHidden.ents.has(e.id))) ents.add(e.id);
   for (const p of sk.points.values()) if (!p.sketchPoint || (userHidden && userHidden.pts.has(p.id))) pts.add(p.id);
   for (const k of sk.constraints.values()) {
     if (!isAnnotation(k) || !dims || (userHidden && userHidden.cons.has(k.id))) cons.add(k.id);

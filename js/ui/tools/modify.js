@@ -7,7 +7,7 @@ import { entityLength } from '../../core/query.js';
 import { fmtLength, fmtAngle } from '../../core/units.js';
 import {
   trimAt, extendAt, filletLines, chamferLines, cornerLines, chainsFor, offsetSides, offsetGeometry, offsetChain,
-  mirrorEntities, transformSelection, translation, rotation, reflectPoint,
+  mirrorEntities, transformSelection, translation, rotation, reflectPoint, patternEntities,
 } from '../../core/edit.js';
 
 const HEAVY = 1e6;
@@ -548,3 +548,182 @@ export class ChamferTool extends CornerTool {
   get label() { return 'Chanfrein'; }
   apply(sk, a, b, d, opts) { return chamferLines(sk, a, b, d, opts); }
 }
+
+// ---------- Répétitions linéaire et circulaire ----------
+/**
+ * Base des répétitions : 1) les éléments à répéter (Valider), 2) la direction (ligne ou cote linéaire) ou le centre
+ * (point, cercle, arc). La petite fenêtre sous la barre règle le sens, l'espacement, le nombre d'occurrences
+ * (original compris), l'espacement constant (occurrences liées) et la cote ; l'aperçu jaune suit ; Valider crée.
+ */
+class PatternTool extends SelectThenActTool {
+  static last = { lin: { step: null, count: 3 }, circ: { step: null, count: 4 } };
+  reset() { this.ref = null; this.rev = false; this.refHover = null; super.reset(); }
+  get firstPhase() { return 'axis'; }
+  get mem() { return PatternTool.last[this.kind]; }
+  get opts() { return { link: true, dim: true, ...(this.tc.settings.patternOpts || {}) }; }
+  setOpt(key, v) { this.tc.setSetting('patternOpts', { ...this.opts, [key]: v }); }
+  onPicked() { this.ref = null; this.tc.updateToolOptions(); }
+  actions() {
+    if (this.phase !== 'axis') return super.actions();
+    const acts = [{ label: 'Changer la sélection', glyph: '↺', run: () => { this.phase = 'pick'; this.ref = null; this.tc.updateToolOptions(); this.updateHint(); } }];
+    if (this.ref) acts.push({ label: 'Valider la répétition', glyph: '✓', cls: 'primary', run: () => this.apply() });
+    return acts;
+  }
+  get highlight() { return new Set([...(this._hl || []), ...this.refIds()]); }
+  set highlight(v) { this._hl = v; }
+  /** Nombre d'occurrences au clavier (entier, original compris). */
+  editCount() {
+    this.tc.numberKeypad({
+      title: 'Nombre d\'occurrences (original compris)', unit: '', initial: String(this.mem.count),
+      validate: (v) => (Number.isInteger(v) && v >= 2 && v <= 500 ? null : 'Un nombre entier, de 2 à 500'),
+      onSubmit: (v) => { this.mem.count = v; this.afterChange(); },
+    });
+  }
+  afterChange() { this.tc.updateToolOptions(); this.updateHint(); this.tc.refreshUI(); }
+  options() {
+    if (this.phase !== 'axis' || !this.ref) return [];
+    const o = this.opts;
+    const set = (key) => (v) => { this.setOpt(key, v); };
+    return [
+      { label: 'Inverser le sens', sub: this.kind === 'lin' ? 'Côté où la répétition se propage' : 'Sens de rotation', value: this.rev, set: (v) => { this.rev = v; } },
+      { label: this.kind === 'lin' ? 'Espacement' : 'Angle', sub: 'Entre deux occurrences', text: this.stepText(), onTap: () => this.editStep() },
+      { label: 'Nombre d\'occurrences', sub: 'Original compris', text: String(this.mem.count), onTap: () => this.editCount() },
+      { label: 'Espacement constant', sub: 'Occurrences liées, à égale distance', value: o.link, set: set('link') },
+      { label: 'Ajouter une cote', sub: o.link ? 'Cote de l\'espacement' : 'Avec l\'espacement constant', value: o.link && o.dim, set: set('dim'), disabled: !o.link },
+    ];
+  }
+  apply() {
+    if (!this.ref) return;
+    const items = this.items.filter((id) => !this.refIds().includes(id) || this.kind === 'circ');
+    const o = this.opts;
+    const params = { ...this.params(), count: this.mem.count, link: o.link, dim: o.link && o.dim, gap: this.tc.pxToWorld(28) };
+    const r = this.tc.applyEdit(this.kind === 'lin' ? 'Répétition linéaire' : 'Répétition circulaire', (sk) => patternEntities(sk, items, params));
+    if (r.ok) { this.reset(); this.tc.updateToolOptions(); }
+    this.updateHint();
+  }
+  preview(d) {
+    if (!this.ref) return;
+    const sk = this.tc.sketch;
+    const items = this.items.filter((id) => !(this.kind === 'lin' && this.refIds().includes(id)));
+    for (let i = 1; i < this.mem.count; i++) ghost(d.ghost, sk, items, this.transform(i));
+  }
+}
+
+/** Répétition linéaire : direction donnée par une ligne (gardée par la relation) ou une cote linéaire. */
+export class LinearPatternTool extends PatternTool {
+  get kind() { return 'lin'; }
+  hint() {
+    if (this.phase === 'pick') return 'Touchez les éléments à répéter, puis Valider';
+    return this.ref ? 'Réglez la répétition, puis Valider · une autre ligne ou cote change la direction' : 'Touchez une ligne ou une cote linéaire : direction de la répétition';
+  }
+  refIds() { return this.ref ? [this.ref.id] : this.refHover ? [this.refHover] : []; }
+  /** Direction unitaire (avant inversion) d'une ligne ou d'une cote linéaire, ou null. */
+  dirFrom(id) {
+    const sk = this.tc.sketch, P = (pid) => sk.points.get(pid);
+    const unit = (v) => { const l = Math.hypot(v.x, v.y); return l > 1e-12 ? { x: v.x / l, y: v.y / l } : null; };
+    const e = sk.entities.get(id);
+    if (e && e.type === 'line') return { id, axis: id, u: unit(sub(P(e.p2), P(e.p1))) };
+    const k = sk.constraints.get(id);
+    if (!k) return null;
+    const L = (lid) => { const l = sk.entities.get(lid); return l && l.type === 'line' ? unit(sub(P(l.p2), P(l.p1))) : null; };
+    switch (k.type) {
+      case 'dimLength': return { id, axis: k.refs[0], u: L(k.refs[0]) };
+      case 'dimHorizontal': return { id, axis: null, u: { x: 1, y: 0 } };
+      case 'dimVertical': return { id, axis: null, u: { x: 0, y: 1 } };
+      case 'dimDistance': return { id, axis: null, u: unit(sub(P(k.refs[1]), P(k.refs[0]))) };
+      case 'dimAlong': { const u = L(k.refs[2]); return u ? { id, axis: null, u: k.perp ? { x: -u.y, y: u.x } : u } : null; }
+      case 'dimPointLine': case 'dimLineLine': {
+        const u = L(k.type === 'dimPointLine' ? k.refs[1] : k.refs[0]);
+        return u ? { id, axis: null, u: { x: -u.y, y: u.x } } : null;
+      }
+      default: return null;
+    }
+  }
+  hover(wp) {
+    if (this.phase !== 'axis') return;
+    const dim = this.tc.hitDimension(wp);
+    const id = dim || this.tc.hitEntity(wp);
+    this.refHover = id && this.dirFrom(id) && this.dirFrom(id).u ? id : null;
+  }
+  tap(wp) {
+    if (this.phase === 'pick') { this.tapPick(wp); return; }
+    this.refHover = null;
+    const id = this.tc.hitDimension(wp) || this.tc.hitEntity(wp);
+    if (!id) return;
+    const r = this.dirFrom(id);
+    if (!r || !r.u) { this.tc.toast('Touchez une ligne ou une cote linéaire'); return; }
+    if (this.ref && this.ref.id === id) { this.ref = null; this.tc.updateToolOptions(); return; }
+    this.ref = r;
+    if (!(this.mem.step > 0)) this.mem.step = this.defaultStep();
+    this.tc.updateToolOptions();
+  }
+  /** Espacement proposé : la taille de la sélection dans la direction, plus un peu, arrondie. */
+  defaultStep() {
+    const sk = this.tc.sketch, u = this.ref.u;
+    let lo = Infinity, hi = -Infinity;
+    for (const id of this.items) {
+      const e = sk.entities.get(id);
+      const pids = e ? sk.entityPointIds(e) : [id];
+      for (const pid of pids) {
+        const p = sk.points.get(pid); if (!p) continue;
+        const r = e && e.type === 'circle' && pid === e.c ? e.r : 0;
+        const t = p.x * u.x + p.y * u.y;
+        lo = Math.min(lo, t - r); hi = Math.max(hi, t + r);
+      }
+    }
+    const size = isFinite(hi - lo) && hi - lo > 1e-9 ? hi - lo : this.tc.pxToWorld(60);
+    return niceRound(size * 1.25);
+  }
+  stepText() { return this.fmtL(this.mem.step || 0); }
+  editStep() { this.tc.lengthKeypad('Espacement', this.mem.step || 10, (mm) => { this.mem.step = mm; this.afterChange(); }); }
+  get dir() { const u = this.ref.u, s = this.rev ? -1 : 1; return { x: u.x * s, y: u.y * s }; }
+  params() { return { kind: 'lin', dir: this.dir, axis: this.ref.axis, step: this.mem.step }; }
+  transform(i) { return translation({ x: this.dir.x * this.mem.step * i, y: this.dir.y * this.mem.step * i }); }
+}
+
+/** Répétition circulaire : autour d'un point, ou du centre d'un cercle ou d'un arc. */
+export class CircularPatternTool extends PatternTool {
+  get kind() { return 'circ'; }
+  hint() {
+    if (this.phase === 'pick') return 'Touchez les éléments à répéter, puis Valider';
+    return this.ref ? 'Réglez la répétition, puis Valider · un autre point ou cercle change le centre' : 'Touchez le centre : un point, un cercle ou un arc';
+  }
+  refIds() { return this.ref ? [this.ref.src, this.ref.id] : this.refHover ? [this.refHover] : []; }
+  centerFrom(wp) {
+    const sk = this.tc.sketch;
+    const h = this.tc.hitGeometry(wp);
+    if (!h) return null;
+    if (sk.points.has(h.id)) return { id: h.id, src: h.id };
+    const e = sk.entities.get(h.id);
+    if (e && (e.type === 'circle' || e.type === 'arc')) return { id: e.c, src: e.id };
+    return { bad: true };
+  }
+  hover(wp) {
+    if (this.phase !== 'axis') return;
+    const c = this.centerFrom(wp);
+    this.refHover = c && !c.bad ? c.src : null;
+  }
+  tap(wp) {
+    if (this.phase === 'pick') { this.tapPick(wp); return; }
+    this.refHover = null;
+    const c = this.centerFrom(wp);
+    if (!c) return;
+    if (c.bad) { this.tc.toast('Touchez un point, un cercle ou un arc (son centre)'); return; }
+    this.ref = c;
+    this.tc.updateToolOptions();
+  }
+  /** Angle entre occurrences : réparti sur 360° tant qu'on ne l'a pas saisi. */
+  get step() { return this.mem.step > 0 ? this.mem.step : 2 * Math.PI / this.mem.count; }
+  stepText() { return fmtAngle(this.step, this.tc.settings) + (this.mem.step > 0 ? '' : ' (360° / ' + this.mem.count + ')'); }
+  editStep() {
+    const deg = this.tc.settings.angleUnit !== 'rad';
+    this.tc.numberKeypad({
+      title: 'Angle entre deux occurrences', unit: deg ? '°' : 'rad', initial: fmtNumberLocal(deg ? this.step * 180 / Math.PI : this.step),
+      validate: (v) => { const r = deg ? v * Math.PI / 180 : v; return r > 1e-6 && r <= 2 * Math.PI + 1e-9 ? null : (deg ? 'Entre 0 et 360°' : 'Entre 0 et 2π'); },
+      onSubmit: (v) => { this.mem.step = deg ? v * Math.PI / 180 : v; this.afterChange(); },
+    });
+  }
+  params() { return { kind: 'circ', center: this.ref.id, step: this.step * (this.rev ? -1 : 1) }; }
+  transform(i) { const c = this.tc.sketch.points.get(this.ref.id); return rotation(c, this.step * (this.rev ? -1 : 1) * i); }
+}
+const fmtNumberLocal = (v) => String(Math.round(v * 10000) / 10000).replace('.', ',');

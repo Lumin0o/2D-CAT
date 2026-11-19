@@ -34,6 +34,8 @@ export const ICONS = {
   chamfer: S(`<path d="M4 20v-9l7-7h9"/><path d="M4 9V4h5" stroke-dasharray="2 2"/>`),
   move: S(`<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9 3 12l3 3M18 9l3 3-3 3"/>`),
   copy: S(`<rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>`),
+  linPattern: S(`<rect x="2.5" y="9" width="5" height="6" rx="1"/><rect x="9.5" y="9" width="5" height="6" rx="1" stroke-dasharray="2 1.6"/><rect x="16.5" y="9" width="5" height="6" rx="1" stroke-dasharray="2 1.6"/><path d="M3 19.5h18" stroke-width="1.2"/><path d="m18.5 17.8 2.5 1.7-2.5 1.7" stroke-width="1.2"/>`),
+  circPattern: S(`<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="4.5" r="2.4"/><circle cx="19.1" cy="14.3" r="2.4" stroke-dasharray="2 1.6"/><circle cx="4.9" cy="14.3" r="2.4" stroke-dasharray="2 1.6"/><path d="M8 20a9 9 0 0 0 8 0" stroke-width="1.2"/>`),
   rotate: S(`<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/>${dot(12, 12)}`),
   select: S(`<path d="M5 3l14 9-6 1-3 6z"/>`),
   undo: S(`<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>`),

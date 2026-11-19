@@ -227,6 +227,10 @@ export class App {
       signedAngleKeypad: (title, rad, cb) => self.signedAngleKeypad(title, rad, cb),
       pxToWorld: (px) => self.vp.pxToWorld(px),
       keypadOpen: () => self.keypad.isOpen(),
+      numberKeypad: (opts) => self.keypad.open(opts),
+      updateToolOptions: () => self.updateToolOptions(),
+      /** Cote touchée (par son texte), ou null. */
+      hitDimension: (wp) => { const h = self.hitAt(self.vp.toScreen(wp), wp); return h && h.type === 'dim' ? h.id : null; },
       setSetting: (key, value) => self.settings.set(key, value, true),
       endpointTangent: (pid) => {
         const es = endpointEntities(self.sketch, pid);
@@ -609,6 +613,9 @@ export class App {
     }
     el.innerHTML = '';
     el.hidden = !chips.length;
+    // juste sous l'indication, quelle que soit sa hauteur (une ou deux lignes)
+    const hint = this.els.hint;
+    if (chips.length && !hint.hidden && hint.offsetHeight) el.style.top = `${hint.offsetTop + hint.offsetHeight + 6}px`;
     for (const a of chips) {
       const b = document.createElement('button');
       b.className = 'rel-chip ' + (a.cls || '');
@@ -625,10 +632,15 @@ export class App {
     el.hidden = !opts.length;
     for (const o of opts) {
       const r = document.createElement('button');
-      r.className = 'topt-row';
-      r.innerHTML = `<span class="topt-label">${o.label}${o.sub ? `<small>${o.sub}</small>` : ''}</span><span class="switch small${o.value ? ' on' : ''}"></span>`;
+      r.className = 'topt-row' + (o.disabled ? ' disabled' : '');
+      const right = o.text !== undefined
+        ? `<span class="topt-value">${o.text}<span class="chev">${icon('chevronRight')}</span></span>`
+        : `<span class="switch small${o.value ? ' on' : ''}"></span>`;
+      r.innerHTML = `<span class="topt-label">${o.label}${o.sub ? `<small>${o.sub}</small>` : ''}</span>${right}`;
       r.addEventListener('click', (e) => {
         e.preventDefault();
+        if (o.disabled) return;
+        if (o.onTap) { o.onTap(); return; }      // valeur : clavier (l'outil rafraîchit la fenêtre ensuite)
         o.set(!o.value);
         this.updateToolOptions();
         if (this.tool) this.tool.updateHint();

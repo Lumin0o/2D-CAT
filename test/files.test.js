@@ -22,14 +22,22 @@ function scene() {
   return sk;
 }
 
-// export DXF : ni construction ni ligne infinie ; relecture identique
+// export DXF (AutoCAD 2000) : construction comprise, sur son calque ; relecture identique
 {
   const sk = scene();
   const { text, count } = exportDXF(sk);
-  ok(count === 6, 'export : 4 lignes + 1 cercle + 1 arc (' + count + ')');
-  ok(/\$INSUNITS\r\n70\r\n4\r\n/.test(text) && /AC1009/.test(text) && text.trim().endsWith('EOF'), 'en-tête R12, unité mm, fin EOF');
+  ok(count === 8, 'export : 4 lignes + cercle + arc + ligne de construction + ligne infinie (' + count + ')');
+  ok(/\$ACADVER\r\n  1\r\nAC1015\r\n/.test(text) && /\$INSUNITS\r\n 70\r\n4\r\n/.test(text) && text.trim().endsWith('EOF'), 'en-tête AutoCAD 2000, unité mm, fin EOF');
+  ok(!/@[A-Z]+@/.test(text), 'tous les champs du modèle remplis');
+  ok(/\$EXTMAX\r\n 10\r\n65\r\n 20\r\n40\r\n/.test(text), 'étendue du dessin (zoom à l\'ouverture)');
+  const all = text.slice(text.indexOf('ENDSEC'));      // après l'en-tête ($HANDSEED)
+  const handles = [...all.matchAll(/\r\n  5\r\n([0-9A-F]+)\r\n/g)].map((m) => parseInt(m[1], 16));
+  const seed = parseInt(/\$HANDSEED\r\n  5\r\n([0-9A-F]+)/.exec(text)[1], 16);
+  ok(new Set(handles).size === handles.length && Math.max(...handles) < seed, 'handles uniques, inférieurs à $HANDSEED');
+  ok((text.match(/\r\n  8\r\nCONSTRUCTION\r\n/g) || []).length === 2 && /\r\nXLINE\r\n/.test(text), 'construction sur le calque CONSTRUCTION, ligne infinie en XLINE');
   const r = parseDXF(text);
-  ok(r.items.length === 6 && r.unitKnown && r.unitMM === 1, 'relecture : 6 éléments en mm');
+  ok(r.items.length === 8 && r.unitKnown && r.unitMM === 1, 'relecture : 8 éléments en mm');
+  ok(r.items.filter((i) => i.construction).length === 2 && r.items.some((i) => i.infinite), 'relecture : construction et ligne infinie retrouvées');
   const arc = r.items.find((i) => i.type === 'arc');
   // l'arc horaire de (30,40) à (10,40) autour de (20,40) passe par le bas : relu comme arc trigonométrique de (10,40) à (30,40)
   ok(arc && nearP(arc.c, { x: 20, y: 40 }) && nearP(arc.s, { x: 10, y: 40 }) && nearP(arc.e, { x: 30, y: 40 }) && arc.ccw, 'arc : sens conservé (passe par le bas)');
@@ -37,11 +45,15 @@ function scene() {
   ok(near(mid.sweep, Math.PI), 'arc : demi-cercle');
   const circ = r.items.find((i) => i.type === 'circle');
   ok(circ && near(circ.r, 5) && nearP(circ.c, { x: 60, y: 10 }), 'cercle relu');
-  // import : entités indépendantes, sans relation
+  // import : sans relation, bouts reliés
   const sk2 = new Sketch();
-  const ids = addImported(sk2, r.items);
+  const ids = addImported(sk2, r.items.filter((i) => !i.construction));
   ok(ids.length === 6 && sk2.constraints.size === 0, 'import : 6 entités, aucune relation');
-  ok(sk2.points.size === 1 + 4 * 2 + 1 + 3, 'import : chaque entité a ses propres points (' + sk2.points.size + ')');
+  ok(sk2.points.size === 1 + 4 + 1 + 3, 'import : bouts reliés (rectangle : 4 points partagés) (' + sk2.points.size + ')');
+  const sk3 = new Sketch();
+  addImported(sk3, r.items);
+  ok([...sk3.entities.values()].filter((e) => e.construction).length === 2, 'import : construction gardée');
+  // contour d'une polyligne arrondie : arc et lignes reliés
 }
 
 // unités : export en pouces, relu en mm
@@ -49,7 +61,7 @@ function scene() {
   const sk = new Sketch();
   sk.addLine(sk.addPoint(0, 0).id, sk.addPoint(25.4, 50.8).id);
   const { text } = exportDXF(sk, { unit: 'inch' });
-  ok(/\r\n11\r\n1\r\n21\r\n2\r\n/.test(text), 'export en pouces : 1" et 2"');
+  ok(/\r\n 11\r\n1\r\n 21\r\n2\r\n/.test(text) && /\$INSUNITS\r\n 70\r\n1\r\n/.test(text), 'export en pouces : 1" et 2"');
   const r = parseDXF(text);
   ok(near(r.items[0].b.x, 25.4) && near(r.items[0].b.y, 50.8), 'relu en mm');
   // sans $INSUNITS : unité par défaut demandée

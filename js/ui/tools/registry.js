@@ -6,7 +6,7 @@ import { ArcCenterTool, Arc3Tool, ArcTangentTool } from './arc.js';
 import { PointTool } from './point.js';
 import {
   ToggleConstructionTool, MeasureTool, TrimTool, ExtendTool, OffsetTool, MirrorTool,
-  FilletTool, ChamferTool, MoveTool, CopyTool, RotateTool,
+  FilletTool, ChamferTool, MoveTool, CopyTool, RotateTool, LinearPatternTool, CircularPatternTool,
 } from './modify.js';
 import { DimensionTool, DimHorizontalTool, DimVerticalTool, DimChainTool, DimOrdinateTool } from './dimension.js';
 
@@ -69,6 +69,10 @@ export const GROUPS = [
     { id: 'copy', label: 'Copier', icon: 'copy' },
     { id: 'rotate', label: 'Pivoter', icon: 'rotate' },
   ] },
+  { id: 'pattern', label: 'Répétition', tools: [
+    { id: 'linearPattern', label: 'Répétition linéaire', sub: 'Le long d\'une ligne ou d\'une cote', icon: 'linPattern' },
+    { id: 'circularPattern', label: 'Répétition circulaire', sub: 'Autour d\'un point ou d\'un cercle', icon: 'circPattern' },
+  ] },
 ];
 
 export const TOOL_CLASSES = {
@@ -104,6 +108,8 @@ export const TOOL_CLASSES = {
   move: MoveTool,
   copy: CopyTool,
   rotate: RotateTool,
+  linearPattern: LinearPatternTool,
+  circularPattern: CircularPatternTool,
 };
 
 const toolIndex = new Map();

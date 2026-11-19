@@ -712,7 +712,7 @@ export function transformSelection(sk, ids, f, { copy = false, angle = 0 } = {})
     }
     const mapRef = (r) => emap.get(r) || map.get(r) || null;
     for (const k of [...sk.constraints.values()]) {
-      if (k.ord || k.type === 'ordZero' || k.type === 'fixed') continue;
+      if (k.ord || k.type === 'ordZero' || k.type === 'fixed' || k.type === 'pattern') continue;   // répétition : centre et axe non recopiés
       if (!k.refs.every(inSel)) continue;
       const refs = k.refs.map(mapRef);
       if (refs.some((r) => !r)) continue;
@@ -748,4 +748,108 @@ export function transformSelection(sk, ids, f, { copy = false, angle = 0 } = {})
   }
   for (const pid of moved) Object.assign(P(sk, pid), f(P(sk, pid)));
   return { ok: true, moved, ids: [...ents] };
+}
+
+// ---------- Répétitions linéaire et circulaire ----------
+/**
+ * Répète les entités ids (et points isolés) :
+ *   kind 'lin'  : translation de step × i le long de dir (vecteur unitaire), i = 1 … count-1 ;
+ *   kind 'circ' : rotation de step × i (radians, signé) autour du point center.
+ * link : « espacement constant » — une relation de répétition garde toutes les occurrences identiques à l'original
+ *   et régulièrement espacées (l'espacement reste réglable par la cote, ou au doigt) ;
+ *   sinon, simples copies (avec les relations internes de la sélection, sans les cotes).
+ * dim : ajoute la cote d'espacement (distance, ou angle entre deux lignes de construction partant du centre).
+ * axis : ligne qui donne la direction (gardée par la relation), sinon dir reste fixe.
+ * @returns {{ok:boolean, msg?:string, ids?:string[]}}
+ */
+export function patternEntities(sk, ids, o) {
+  const lin = o.kind === 'lin';
+  const n = Math.round(o.count);
+  if (!(n >= 2)) return { ok: false, msg: 'Au moins 2 occurrences' };
+  if (!(Math.abs(o.step) > 1e-12)) return { ok: false, msg: 'Espacement nul' };
+  const { ents, pts } = selectionParts(sk, ids);
+  if (lin && o.axis) ents.delete(o.axis);
+  if (!ents.size && !pts.size) return { ok: false, msg: 'Rien à répéter' };
+  const ptList = [...pts], entList = [...ents];
+  const C = lin ? null : P(sk, o.center);
+  if (!lin && !C) return { ok: false, msg: 'Centre introuvable' };
+  const f = (i) => (lin ? translation(mul(o.dir, o.step * i)) : rotation(C, o.step * i));
+  const shared = (pid) => !lin && pid === o.center;            // le centre reste commun à toutes les occurrences
+  const inSel = (r) => ents.has(r) || pts.has(r);
+  const made = [];
+  const inst = [];
+  for (let i = 1; i < n; i++) {
+    const map = new Map(), emap = new Map();
+    const T = f(i);
+    for (const pid of ptList) {
+      if (shared(pid)) { map.set(pid, pid); continue; }
+      const p = P(sk, pid), q = T(p);
+      const np = sk.addPoint(q.x, q.y);
+      if (p.sketchPoint) np.sketchPoint = true;
+      map.set(pid, np.id);
+    }
+    for (const eid of entList) {
+      const e = sk.entities.get(eid);
+      const ne = { ...e, id: sk.newId('e') };
+      for (const key of ['p1', 'p2', 'c', 's', 'e']) if (key in ne && map.has(ne[key])) ne[key] = map.get(ne[key]);
+      sk.entities.set(ne.id, ne);
+      emap.set(eid, ne.id);
+      made.push(ne.id);
+    }
+    if (!o.link) {
+      // copies libres : relations internes de la sélection (pas les cotes)
+      for (const k of [...sk.constraints.values()]) {
+        if (k.type === 'fixed' || k.type === 'pattern' || k.type === 'ordZero' || k.ord || 'value' in k) continue;
+        if (!k.refs.every(inSel)) continue;
+        const refs = k.refs.map((r) => emap.get(r) || map.get(r));
+        if (refs.some((r) => !r)) continue;
+        const { id: _i, type, refs: _r, ...rest } = k;
+        sk.addConstraint(type, refs, rest);
+      }
+    }
+    inst.push({ map, emap });
+  }
+  if (!o.link) return { ok: true, ids: made };
+
+  // relation de répétition
+  const mPts = ptList.filter((pid) => !shared(pid));
+  const circles = entList.filter((eid) => sk.entities.get(eid).type === 'circle');
+  const arcEnds = new Set();
+  for (const eid of entList) { const e = sk.entities.get(eid); if (e.type === 'arc') arcEnds.add(e.e); }
+  // point de référence : ni fin d'arc (position seulement angulaire), ni au centre
+  let r = mPts.findIndex((pid) => !arcEnds.has(pid) && (lin || dist(P(sk, pid), C) > 1e-9));
+  if (r < 0) r = mPts.findIndex((pid) => lin || dist(P(sk, pid), C) > 1e-9);
+  if (r < 0) return { ok: false, msg: 'Rien à répéter autour de ce centre' };
+  const refs = [...mPts];
+  for (const { map } of inst) for (const pid of mPts) refs.push(map.get(pid));
+  refs.push(...circles);
+  for (const { emap } of inst) for (const cid of circles) refs.push(emap.get(cid));
+  const extra = {};
+  if (lin) {
+    if (o.axis && sk.entities.has(o.axis)) { extra.axis = o.axis; if (!refs.includes(o.axis)) refs.push(o.axis); }
+    else extra.dir = { x: o.dir.x, y: o.dir.y };
+  } else {
+    extra.center = o.center;
+    if (!refs.includes(o.center)) refs.push(o.center);
+  }
+  sk.addConstraint('pattern', refs, { kind: o.kind, m: mPts.length, n, mc: circles.length, r, ...extra });
+
+  if (o.dim) {
+    const a = mPts[r], b = inst[0].map.get(a);
+    const A = P(sk, a), B = P(sk, b);
+    const gap = o.gap || Math.abs(o.step) * 0.3;
+    if (lin) {
+      const nrm = perp(o.dir);
+      sk.addConstraint('dimDistance', [a, b], { value: Math.abs(o.step), pos: add(mid(A, B), mul(nrm, gap)) });
+    } else {
+      const la = sk.addLine(o.center, a, { construction: true }), lb = sk.addLine(o.center, b, { construction: true });
+      const ra = sub(A, C), rb = sub(B, C);
+      const ang = Math.atan2(cross(ra, rb), dot(ra, rb));
+      const bis = norm(add(norm(ra), norm(rb)));
+      const R = Math.min(dist(A, C), dist(B, C)) * 0.6;
+      const pos = Math.hypot(bis.x, bis.y) > 1e-9 ? add(C, mul(bis, R)) : add(C, mul(perp(norm(ra)), R));
+      sk.addConstraint('dimAngle', [la.id, lb.id], { value: Math.abs(ang), s1: 1, s2: 1, sgn: ang < 0 ? -1 : 1, pos });
+    }
+  }
+  return { ok: true, ids: made };
 }

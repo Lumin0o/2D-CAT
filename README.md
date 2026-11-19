@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.0.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.1.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -115,11 +115,23 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 - **Enregistrer** : donne un nom (proposé : « Esquisse du jj/mm/aaaa hhhmm »). Une esquisse déjà enregistrée est mise à jour (changer le nom la renomme) ou copiée (« Enregistrer une copie »). Un nom déjà pris par une autre esquisse : proposition de la remplacer.
 - **Charger** : liste des esquisses enregistrées (miniature, nom, date), de la plus récente à la plus ancienne ; toucher pour ouvrir, crayon pour renommer, corbeille pour supprimer (avec confirmation). Supprimer l'esquisse ouverte la laisse à l'écran, non enregistrée.
 - Ouvrir une esquisse ou en commencer une nouvelle alors que l'esquisse en cours a des modifications non enregistrées : proposition de l'enregistrer d'abord, de continuer sans enregistrer, ou d'annuler. L'historique annuler / rétablir repart de zéro à l'ouverture.
-- **Exporter DXF** : lignes, cercles et arcs en vraie grandeur, dans l'unité choisie dans les réglages (en-tête `$INSUNITS`), format ASCII R12 lu par tous les logiciels de CAO. La construction (lignes, lignes infinies, cercles et arcs de construction), les cotes, les relations et les points ne sont pas exportés, ni ce qui est masqué avec le bouton œil.
+- **Exporter DXF** : lignes, cercles et arcs en vraie grandeur, dans l'unité choisie dans les réglages (en-tête `$INSUNITS`). Les cotes, les relations et les points ne sont pas exportés, ni ce qui est masqué avec le bouton œil (format et construction : voir 0.4.1).
 - **Importer DXF** : lignes, cercles, arcs, polylignes (LWPOLYLINE, POLYLINE, avec leurs arrondis), ajoutés à l'esquisse en cours comme entités indépendantes, sans relations ; la vue se cadre dessus ; annulable. Unité lue dans le fichier (sinon celle des réglages). Textes, hachures, blocs, cotes du fichier sont ignorés (le message les compte).
 - **Exporter PDF** : A4 vectoriel (paysage ou portrait selon l'esquisse), fond blanc, traits noirs, cotes, cadré automatiquement, avec une ligne de pied (nom, unité des cotes, date). **Exporter image** : PNG de 3200 px de côté, fond blanc. Sans grille, axes, points, icônes de relations ni construction ; ce qui est masqué avec le bouton œil n'est pas exporté.
 - Les exports ouvrent la **feuille de partage iOS** (Enregistrer dans Fichiers, AirDrop, Mail…), sinon un téléchargement.
 - **Réglages** complets : unité de longueur (mm, cm, m, pouce, pied, yard ; liste), précision des fractions (1/8 à 1/64, utile en pouce / pied / yard), unité d'angle (degrés, radians), couleurs d'état par thème (sélecteur de couleur pour sous-contrainte, entièrement contrainte, sur-contrainte, et « Couleurs par défaut »), en plus de ce qui existait (thème, barre d'outils, appui long, tracé, favoris, réinitialisation). Un exemple montre l'affichage choisi (ex. 5 1/4"). Changer d'unité ne modifie pas la géométrie.
+
+## Retours iPhone intégrés (0.4.1)
+
+- **Répétition linéaire** et **Répétition circulaire** (nouveau groupe « Répétition ») : 1) toucher les éléments à répéter (ou les prendre au cadre), Valider ; 2) toucher la direction — une ligne (gardée par la relation) ou une cote linéaire (horizontale, verticale, longueur, distance…) — ou le centre — un point, un cercle ou un arc. La petite fenêtre sous la barre règle : Inverser le sens, Espacement (ou Angle), Nombre d'occurrences (original compris), Espacement constant, Ajouter une cote. Aperçu jaune en direct ; Valider crée la répétition. En circulaire, l'angle vaut 360° / nombre tant qu'on ne l'a pas saisi.
+  - **Espacement constant** : une relation « Répétition » (icône ⋯ sur la 1re occurrence) garde toutes les occurrences identiques à l'original et régulièrement espacées : modifier l'original ou l'espacement met tout à jour ; l'original ne bouge pas quand on change l'espacement. Sans elle : simples copies (avec les relations internes de la sélection, sans les cotes).
+  - **Ajouter une cote** : cote de l'espacement (distance entre l'original et la 1re occurrence) ou, en circulaire, cote d'angle entre deux lignes de construction partant du centre.
+- Enregistrer : nom proposé « Esquisse 19/11 » (« Esquisse 19/11 (2) » s'il existe déjà) ; la fenêtre montre la liste des esquisses enregistrées (toucher un nom le reprend, pour la remplacer).
+- Exports : seul le fichier est partagé (plus de fichier texte en plus).
+- **DXF au format AutoCAD 2000** (AC1015, complet : en-tête avec l'étendue du dessin et les unités, tables, blocs, objets), pour AutoCAD (dont l'app mobile) ; vérifié avec la bibliothèque de référence ezdxf (lecture stricte et audit sans erreur).
+- La construction est exportée (DXF : calque « CONSTRUCTION » en tirets, lignes infinies en XLINE ; PDF et image : en tirets) ; pour l'enlever, la masquer avec l'œil. L'import DXF relit le calque CONSTRUCTION et les XLINE.
+- Import DXF : les bouts qui se touchent sont reliés (point commun), comme un contour tracé dans l'app.
+- Réglages : plus de choix du thème pour les couleurs d'état ; les sélecteurs règlent les couleurs du thème affiché.
 
 ## Tester sur ordinateur
 

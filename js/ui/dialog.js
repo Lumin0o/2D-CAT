@@ -3,7 +3,8 @@
 
 /**
  * @param {{title:string, message?:string, input?:{value?:string, placeholder?:string},
- *          buttons:Array<{label:string, value:string, style?:'primary'|'danger'|'cancel'}>}} opts
+ *          buttons:Array<{label:string, value:string, style?:'primary'|'danger'|'cancel'}>,
+ *          extra?:HTMLElement, onInput?:(input:HTMLInputElement)=>void}} opts   extra : contenu affiché sous le champ
  * @returns {Promise<{button:string, value:string}>}  button : value du bouton (« cancel » si on touche le fond)
  */
 export function showDialog(opts) {
@@ -35,6 +36,7 @@ export function showDialog(opts) {
       input.setAttribute('autocapitalize', 'sentences');
       input.enterKeyHint = 'done';
       box.appendChild(input);
+      if (opts.onInput) opts.onInput(input);
     }
     const row = document.createElement('div');
     row.className = 'dialog-buttons' + (opts.buttons.length > 2 ? ' stacked' : '');
@@ -59,6 +61,7 @@ export function showDialog(opts) {
       row.appendChild(btn);
     }
     box.appendChild(row);
+    if (opts.extra) box.appendChild(opts.extra);       // sous les boutons (le clavier cache le bas de l'écran)
     layer.appendChild(box);
     layer.addEventListener('pointerdown', (e) => { if (e.target === layer) { e.preventDefault(); finish('cancel'); } });
     if (input) {
@@ -73,10 +76,10 @@ export function showDialog(opts) {
   });
 }
 
-/** Nom proposé pour une nouvelle esquisse : « Esquisse du 18/11/2026 19:04 ». */
+/** Nom proposé pour une nouvelle esquisse : « Esquisse 19/11 ». */
 export function defaultName(d = new Date()) {
   const p = (v) => String(v).padStart(2, '0');
-  return `Esquisse du ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}h${p(d.getMinutes())}`;
+  return `Esquisse ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
 }
 
 /** Date courte : « 18/11/2026 19:04 ». */

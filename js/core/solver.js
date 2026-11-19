@@ -43,6 +43,9 @@ export function buildSystem(sk) {
   const X = (pid) => { const i = pIndex.get(pid); return i === undefined ? sk.points.get(pid).x : x[i]; };
   const Y = (pid) => { const i = pIndex.get(pid); return i === undefined ? sk.points.get(pid).y : x[i + 1]; };
   const eqs = [];
+  // projections : points entièrement déterminés par d'autres (copies d'une répétition), recalés après chaque pas
+  const projs = [];
+  const light = new Set();      // points qui bougent « gratuitement » (copies) : l'original reste en place
   const add = (cid, pids, rids, f) => {
     const vs = new Set();
     for (const pid of pids) { const i = pIndex.get(pid); if (i !== undefined) { vs.add(i); vs.add(i + 1); } }
@@ -191,6 +194,71 @@ export function buildSystem(sk) {
         add(k.id, [...g1.pids, ...g2.pids], [...g1.rids, ...g2.rids], () => s1 * g1.f() - s2 * g2.f());
         break;
       }
+      case 'pattern': {
+        // répétition : chaque occurrence i est l'original transformé i fois ; l'occurrence 1 donne le pas
+        const m = k.m, n = k.n, mc = k.mc || 0, j0 = k.r || 0;
+        if (!(m > 0 && n >= 2) || r.length < m * n + mc * n) break;
+        const pt = (i, j) => r[i * m + j];
+        const lin = k.kind === 'lin';
+        const axis = lin && k.axis ? ent(k.axis) : null;
+        if (lin && !isLine(axis) && !k.dir) break;
+        if (!lin && !sk.points.has(k.center)) break;
+        const o0 = pt(0, j0), c1 = pt(1, j0);
+        const dirPids = axis ? [axis.p1, axis.p2] : [];
+        const cen = lin ? [] : [k.center];
+        const u = () => {
+          if (!axis) return k.dir;
+          const ux = X(axis.p2) - X(axis.p1), uy = Y(axis.p2) - Y(axis.p1), l = Math.hypot(ux, uy) || 1;
+          return { x: ux / l, y: uy / l };
+        };
+        // transformation de l'occurrence i appliquée au point o
+        const target = (i, o) => {
+          if (lin) { const tx = X(c1) - X(o0), ty = Y(c1) - Y(o0); return [X(o) + i * tx, Y(o) + i * ty]; }
+          const cx = X(k.center), cy = Y(k.center);
+          const ax = X(o0) - cx, ay = Y(o0) - cy, bx = X(c1) - cx, by = Y(c1) - cy;
+          const t = i * Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+          const co = Math.cos(t), si = Math.sin(t), vx = X(o) - cx, vy = Y(o) - cy;
+          return [cx + vx * co - vy * si, cy + vx * si + vy * co];
+        };
+        light.add(c1);
+        if (lin) add(k.id, [o0, c1, ...dirPids], [], () => { const d = u(); return (X(c1) - X(o0)) * d.y - (Y(c1) - Y(o0)) * d.x; });
+        else add(k.id, [o0, c1, k.center], [], () => dist(c1, k.center) - dist(o0, k.center));
+        // fins d'arcs : leur distance au centre est déjà donnée par l'arc → seulement la position angulaire
+        const arcOfEnd = new Map();
+        for (const e of sk.entities.values()) if (e.type === 'arc') { if (!arcOfEnd.has(e.e)) arcOfEnd.set(e.e, []); arcOfEnd.get(e.e).push(e); }
+        for (let i = 1; i < n; i++) for (let j = 0; j < m; j++) {
+          if (i === 1 && j === j0) continue;
+          const q = pt(i, j), o = pt(0, j);
+          if (!sk.points.has(q) || !sk.points.has(o)) continue;
+          light.add(q);
+          const vars = [q, o, o0, c1, ...dirPids, ...cen];
+          const arcs = arcOfEnd.get(q) || [];
+          if (arcs.length >= 2) continue;
+          if (arcs.length === 1) {
+            const cc = arcs[0].c;
+            const iq = pIndex.get(q);
+            if (iq !== undefined) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
+            add(k.id, [...vars, cc], [], () => {
+              const [tx, ty] = target(i, o);
+              const ax = X(q) - X(cc), ay = Y(q) - Y(cc), bx = tx - X(cc), by = ty - Y(cc);
+              return (ax * by - ay * bx) / (Math.hypot(bx, by) || 1);
+            });
+            continue;
+          }
+          add(k.id, vars, [], () => X(q) - target(i, o)[0]);
+          add(k.id, vars, [], () => Y(q) - target(i, o)[1]);
+          const iq = pIndex.get(q);
+          if (iq !== undefined && !arcs.length) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
+        }
+        // cercles : même rayon que l'original
+        for (let i = 1; i < n; i++) for (let j = 0; j < mc; j++) {
+          const oc = ent(r[m * n + j]), qc = ent(r[m * n + i * mc + j]);
+          if (!isCurve(oc) || !isCurve(qc)) continue;
+          const co = curve(oc), cq = curve(qc);
+          add(k.id, [...co.pids, ...cq.pids], [...co.rids, ...cq.rids], () => cq.r() - co.r());
+        }
+        break;
+      }
       case 'dimLength': if (isLine(A)) add(k.id, [A.p1, A.p2], [], () => dist(A.p1, A.p2) - k.value); break;
       case 'dimDistance': if (P0 && P1) add(k.id, [r[0], r[1]], [], () => dist(r[0], r[1]) - k.value); break;
       case 'dimHorizontal':
@@ -239,7 +307,8 @@ export function buildSystem(sk) {
       default: break;
     }
   }
-  return { n, x, eqs, pIndex, rIndex, read, write };
+  const project = () => { for (const p of projs) p(); };
+  return { n, x, eqs, pIndex, rIndex, read, write, project, light };
 }
 
 function residuals(sys) {
@@ -308,9 +377,14 @@ export function solve(sk, options = {}) {
   const { x, eqs, n } = sys;
   const m = eqs.length;
   if (m === 0) return { ok: true, residual: 0, iterations: 0 };
+  sys.project();
   let F = residuals(sys);
   if (n === 0) return { ok: maxAbs(F) < 1e-6, residual: maxAbs(F), iterations: 0 };
   const winv = new Float64Array(n).fill(1);
+  for (const id of sys.light) {
+    const i = sys.pIndex.get(id);
+    if (i !== undefined && !(options.weights && options.weights.has(id))) { winv[i] = 1e6; winv[i + 1] = 1e6; }
+  }
   if (options.weights) {
     for (const [id, w] of options.weights) {
       const i = sys.pIndex.get(id);
@@ -355,6 +429,7 @@ export function solve(sk, options = {}) {
     let alpha = 1, improved = false, F1 = F, c1 = cost;
     for (let ls = 0; ls < 8; ls++) {
       for (let v = 0; v < n; v++) x[v] = x0[v] + alpha * dx[v];
+      sys.project();
       F1 = residuals(sys); c1 = norm2(F1);
       if (c1 < cost || c1 < tol * tol) { improved = true; break; }
       alpha /= 2;

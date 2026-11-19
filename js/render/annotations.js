@@ -263,12 +263,13 @@ function ordinateLayout(sk, k) {
 // ---------- Icônes de relations ----------
 export const REL_GLYPH = {
   horizontal: 'H', vertical: 'V', parallel: '//', perpendicular: '⊥', tangent: 'T', concentric: '◎',
-  equal: '=', collinear: '≡', symmetric: 'S', midpoint: 'M', coincident: '•', fixed: 'F', offsetEq: 'D',
+  equal: '=', collinear: '≡', symmetric: 'S', midpoint: 'M', coincident: '•', fixed: 'F', offsetEq: 'D', pattern: '⋯',
 };
 export const REL_LABEL = {
   horizontal: 'Horizontale', vertical: 'Verticale', coincident: 'Coïncidente', collinear: 'Colinéaire',
   parallel: 'Parallèle', perpendicular: 'Perpendiculaire', tangent: 'Tangente', concentric: 'Concentrique',
   equal: 'Égale', symmetric: 'Symétrique', midpoint: 'Point milieu', fixed: 'Fixe', offsetEq: 'Décalage identique',
+  pattern: 'Répétition',
 };
 
 /**
@@ -330,6 +331,7 @@ export function layoutBadges(sk, vp, hidden = null) {
     if (isAnnotation(k) || (hidden && hidden.cons.has(k.id))) continue;
     if (k.type === 'coincident' || k.type === 'midpoint') { atPoint(k.id, k.type, k.refs[0]); continue; }
     if (k.type === 'symmetric') { atPoint(k.id, k.type, k.refs[0]); atPoint(k.id, k.type, k.refs[1]); continue; }
+    if (k.type === 'pattern') { atPoint(k.id, k.type, k.refs[k.m + (k.r || 0)]); continue; }    // une icône, sur la 1re occurrence
     if (k.type === 'offsetEq') { const e = sk.entities.get(k.refs[3]); if (e) atEntity(k.id, k.type, e); continue; }
     for (const r of k.refs) {
       const e = sk.entities.get(r);
