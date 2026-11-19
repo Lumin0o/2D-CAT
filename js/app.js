@@ -1,5 +1,6 @@
 // Contrôleur principal : relie modèle, solveur, rendu et interface.
-import { Sketch, ORIGIN_ID } from './core/model.js';
+import { Sketch, ORIGIN_ID, textBox } from './core/model.js';
+import { setPatternCount } from './core/edit.js';
 import { solve, analyze, isDimension, isAnnotation } from './core/solver.js';
 import { History } from './core/history.js';
 import { hitTest, entityDistance, entityInsideRect, entityTouchesRect, outwardTangentAt, endpointEntities, keyPoints, closestOnEntity, entityIntersections, entityLength } from './core/query.js';
@@ -23,6 +24,7 @@ import { Keypad } from './ui/keypad.js';
 import { RelationBar } from './ui/relations.js';
 import { TOOL_CLASSES, getTool, groupOf } from './ui/tools/registry.js';
 import { icon } from './ui/icons.js';
+import { textRows, askText } from './ui/tools/text.js';
 
 const HIT_PX = 12;      // zone de toucher élargie autour des traits et points
 const SNAP_PX = 14;     // rayon d'aimantation
@@ -32,6 +34,13 @@ const ENTITY_SNAPS = new Set(['on', 'midpoint', 'quadrant', 'intersection']);
 const HEAVY = 1e6;      // coût de déplacement des éléments qui doivent rester en place
 
 const seqOf = (id) => parseInt(String(id).slice(1), 36);
+
+/** Mélange de deux couleurs #rrggbb : t de a, 1 - t de b. */
+function mixColor(a, b, t) {
+  const p = (c) => { const h = String(c).replace('#', ''); const f = h.length === 3 ? h.split('').map((x) => x + x).join('') : h; return [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16) || 0); };
+  const A = p(a), B = p(b);
+  return '#' + A.map((x, i) => Math.round(x * t + B[i] * (1 - t)).toString(16).padStart(2, '0')).join('');
+}
 
 export class App {
   constructor() {
@@ -108,6 +117,14 @@ export class App {
     this.els.multi.innerHTML = icon('multi');
     this.els.box.innerHTML = icon('boxSelect');
     this.els.full.innerHTML = icon('fullscreen');
+    // bouton qui réduit / rouvre la petite fenêtre d'options (comme la barre d'outils)
+    const tog = document.createElement('button');
+    tog.id = 'toolopts-toggle';
+    tog.className = 'round-btn small toolopts-toggle';
+    tog.hidden = true;
+    this.els.canvasWrap.appendChild(tog);
+    this.els.optsToggle = tog;
+    tog.addEventListener('click', (e) => { e.preventDefault(); this.settings.set('optsCollapsed', !this.settings.get('optsCollapsed'), true); this.updateToolOptions(); this.updateToolActions(); });
     this.updateVisButton();
     this.els.snap.querySelector('.bb-icon').innerHTML = icon('magnet');
     this.els.grid.querySelector('.bb-icon').innerHTML = icon('grid');
@@ -229,6 +246,8 @@ export class App {
       keypadOpen: () => self.keypad.isOpen(),
       numberKeypad: (opts) => self.keypad.open(opts),
       updateToolOptions: () => self.updateToolOptions(),
+      /** Texte touché (outil Texte), ou null. */
+      hitText: (wp) => self.hitText(wp),
       /** Cote touchée (par son texte), ou null. */
       hitDimension: (wp) => { const h = self.hitAt(self.vp.toScreen(wp), wp); return h && h.type === 'dim' ? h.id : null; },
       setSetting: (key, value) => self.settings.set(key, value, true),
@@ -333,28 +352,34 @@ export class App {
     if (this._colors) return this._colors;
     const theme = this.settings.resolvedTheme();
     const dark = theme === 'dark';
-    const c = this.settings.get('colors')[theme];
+    const c = { ...DEFAULT_SETTINGS.colors[theme], ...(this.settings.get('colors')[theme] || {}) };
     const css = getComputedStyle(document.documentElement);
     const v = (name) => css.getPropertyValue(name).trim();
+    const canvasBg = v('--canvas-bg') || (dark ? '#121214' : '#d8d8e2');
+    // fond des icônes : leur couleur, très atténuée (sur le fond sombre, ou vers le blanc en thème clair)
+    const soft = (col) => mixColor(col, dark ? canvasBg : '#ffffff', dark ? 0.25 : 0.17);
     this._colors = {
       under: c.under, full: c.full, over: c.over,
-      selected: dark ? '#ffb340' : '#ff8a00',
-      preview: dark ? '#9ad0ff' : '#1f6fe5',
-      ghost: '#ffff00',                         // aperçu jaune des modifications (symétrie, décaler, copier…)
+      selected: c.selected,
+      preview: c.preview,
+      ghost: c.ghost,                           // aperçu jaune des modifications (symétrie, décaler, copier…)
       guide: dark ? '#8a8a90' : '#9a9aa0',
-      snap: dark ? '#ffd60a' : '#c98a00',
-      origin: dark ? '#ff6b5e' : '#d8392b',
-      dim: dark ? '#c9c9ce' : '#3c3c43',
-      dimDriven: '#8e8e93',
-      badgeBg: dark ? '#1f3d29' : '#d6f2dd',
-      badgeFg: dark ? '#7ee29a' : '#1c7a35',
+      snap: c.snap,
+      origin: c.origin,
+      dim: c.dim,
+      dimDriven: c.dimDriven,
+      badgeBg: soft(c.badge),
+      badgeFg: c.badge,
+      patternBg: soft(c.pattern),
+      patternFg: c.pattern,
+      text: c.text,
       loupeRing: dark ? '#f2f2f0' : '#3c3c43',
-      canvasBg: v('--canvas-bg') || (dark ? '#121214' : '#d8d8e2'),
-      gridPaper: v('--grid-paper') || '#c8763a',
+      canvasBg,
+      gridPaper: c.grid || v('--grid-paper') || '#a2a6b2',
       gridAlpha: parseFloat(v('--grid-alpha')) || 0.8,
-      axis: v('--axis') || '#a8a8ae',
+      axis: c.axis || v('--axis') || '#a8a8ae',
       accent: v('--accent') || '#0a84ff',
-      green: v('--green') || '#30b14e',
+      green: c.measure || v('--green') || '#30b14e',
     };
     return this._colors;
   }
@@ -405,13 +430,14 @@ export class App {
   /** Affichage modifié : la sélection perd ce qui vient d'être masqué. */
   onVisibilityChange() {
     const H = this.hidden();
-    if (H) for (const id of [...this.selection]) if (H.ents.has(id) || H.pts.has(id) || H.cons.has(id)) this.selection.delete(id);
+    if (H) for (const id of [...this.selection]) if (H.ents.has(id) || H.pts.has(id) || H.cons.has(id) || H.texts.has(id)) this.selection.delete(id);
     this.updateVisButton();
     this.refreshUI();
   }
   refreshUI() {
     this.infobar.update();
     this.relbar.update();
+    if (!this.tool) this.updateToolOptions();      // texte sélectionné : sa fenêtre d'options
     this.updateToolActions();
     this.requestDraw();
   }
@@ -454,7 +480,7 @@ export class App {
     this.errorIds = null;
     this.analysis = analyze(this.sketch);
     const sk = this.sketch;
-    for (const id of [...this.selection]) if (!sk.entities.has(id) && !sk.points.has(id) && !sk.constraints.has(id)) this.selection.delete(id);
+    for (const id of [...this.selection]) if (!sk.entities.has(id) && !sk.points.has(id) && !sk.constraints.has(id) && !sk.texts.has(id)) this.selection.delete(id);
     this.updateUndoButtons();
     this.scheduleSave();
     this.refreshUI();
@@ -624,13 +650,26 @@ export class App {
       el.appendChild(b);
     }
   }
-  /** Options de l'outil en cours (petite fenêtre sous la barre d'outils, ex. Décaler). */
+  /**
+   * Options de l'outil en cours (petite fenêtre sous la barre d'outils, ex. Décaler), ou du texte sélectionné.
+   * Le bouton à sa droite la réduit (et la rouvre), comme la barre d'outils.
+   */
   updateToolOptions() {
     const el = this.els.toolopts;
-    const opts = this.tool && this.tool.options ? this.tool.options() : [];
+    const opts = this.tool ? (this.tool.options ? this.tool.options() : []) : this.selectionOptions();
+    const collapsed = !!this.settings.get('optsCollapsed');
+    const tog = this.els.optsToggle;
     el.innerHTML = '';
-    el.hidden = !opts.length;
+    el.hidden = !opts.length || collapsed;
+    if (tog) {
+      tog.hidden = !opts.length;
+      tog.innerHTML = icon(collapsed ? 'chevron' : 'chevronUp');
+      tog.classList.toggle('on', collapsed);
+      tog.setAttribute('aria-label', collapsed ? 'Afficher les options' : 'Réduire les options');
+    }
+    const refresh = () => { this.updateToolOptions(); if (this.tool) this.tool.updateHint(); this.refreshUI(); };
     for (const o of opts) {
+      if (o.colors) { el.appendChild(this.colorRow(o, refresh)); continue; }
       const r = document.createElement('button');
       r.className = 'topt-row' + (o.disabled ? ' disabled' : '');
       const right = o.text !== undefined
@@ -642,16 +681,58 @@ export class App {
         if (o.disabled) return;
         if (o.onTap) { o.onTap(); return; }      // valeur : clavier (l'outil rafraîchit la fenêtre ensuite)
         o.set(!o.value);
-        this.updateToolOptions();
-        if (this.tool) this.tool.updateHint();
-        this.refreshUI();
+        refresh();
       });
       el.appendChild(r);
     }
-    // l'indication et les actions passent sous la fenêtre
-    const h = opts.length ? el.offsetHeight : 0;
+    // l'indication et les actions passent sous la fenêtre (ou sous son bouton, fenêtre réduite)
+    const h = opts.length ? (collapsed ? 36 : el.offsetHeight) : 0;
     this.els.hint.style.top = h ? `${h + 16}px` : '';
     this.els.toolacts.style.top = h ? `${h + 54}px` : '';
+  }
+  /** Ligne « Couleur » : pastilles (A = automatique) et couleur au choix. */
+  colorRow(o, refresh) {
+    const r = document.createElement('div');
+    r.className = 'topt-row topt-colors';
+    r.innerHTML = `<span class="topt-label">${o.label}${o.sub ? `<small>${o.sub}</small>` : ''}</span>`;
+    const box = document.createElement('div');
+    box.className = 'topt-swatches';
+    const pick = (c) => { o.set(c); refresh(); };
+    let known = false;
+    for (const c of o.colors) {
+      const b = document.createElement('button');
+      const on = (c || null) === (o.value || null);
+      if (on) known = true;
+      b.className = 'topt-swatch' + (on ? ' on' : '') + (c ? '' : ' auto');
+      if (c) b.style.background = c; else { b.textContent = 'A'; b.style.color = this.colors().text; }
+      b.setAttribute('aria-label', c ? `Couleur ${c}` : 'Couleur automatique');
+      b.addEventListener('click', (e) => { e.preventDefault(); pick(c); });
+      box.appendChild(b);
+    }
+    const lab = document.createElement('label');
+    lab.className = 'topt-swatch custom' + (!known && o.value ? ' on' : '');
+    if (!known && o.value) lab.style.background = o.value;
+    lab.setAttribute('aria-label', 'Autre couleur');
+    const inp = document.createElement('input');
+    inp.type = 'color';
+    inp.value = o.value || '#000000';
+    inp.addEventListener('change', () => pick(inp.value));
+    lab.appendChild(inp);
+    box.appendChild(lab);
+    r.appendChild(box);
+    return r;
+  }
+  /** Fenêtre d'options sans outil : un texte sélectionné seul (texte, hauteur, couleur). */
+  selectionOptions() {
+    if (this.selection.size !== 1) return [];
+    const t = this.sketch.texts.get([...this.selection][0]);
+    if (!t) return [];
+    return textRows(this.tc, t, (patch) => {
+      const cur = this.sketch.texts.get(t.id);
+      if (!cur) return;
+      Object.assign(cur, patch);
+      this.commit('Texte modifié');
+    });
   }
 
   // ---------- Test de toucher (mode sélection) ----------
@@ -678,7 +759,24 @@ export class App {
     }
     if (bb) return { type: 'badge', id: bb.id };
     const tol = this.vp.pxToWorld(HIT_PX);
-    return hitTest(sk, wp, tol, tol, H);
+    const tx = this.hitText(wp, 0);            // en plein dans un texte : le texte d'abord
+    if (tx) return { type: 'text', id: tx };
+    const g = hitTest(sk, wp, tol, tol, H);
+    if (g) return g;
+    const tx2 = this.hitText(wp);
+    return tx2 ? { type: 'text', id: tx2 } : null;
+  }
+  /** Texte sous le doigt (boîte élargie de padPx), le dernier posé d'abord ; ou null. */
+  hitText(wp, padPx = 6) {
+    const H = this.hidden();
+    const pad = this.vp.pxToWorld(padPx);
+    let found = null;
+    for (const t of this.sketch.texts.values()) {
+      if (H && H.texts.has(t.id)) continue;
+      const b = textBox(t);
+      if (wp.x >= b.minX - pad && wp.x <= b.maxX + pad && wp.y >= b.minY - pad && wp.y <= b.maxY + pad) found = t.id;
+    }
+    return found;
   }
 
   // ---------- Gestes un doigt ----------
@@ -770,13 +868,16 @@ export class App {
     for (const p of this.sketch.points.values()) pts.set(p.id, [p.x, p.y]);
     for (const e of this.sketch.entities.values()) if (e.type === 'circle') radii.set(e.id, e.r);
     for (const k of this.sketch.constraints.values()) if (k.pos) dims.set(k.id, { ...k.pos });
-    return { pts, radii, dims };
+    const texts = new Map();
+    for (const t of this.sketch.texts.values()) texts.set(t.id, [t.x, t.y]);
+    return { pts, radii, dims, texts };
   }
   restorePositions(snap) {
     const sk = this.sketch;
     for (const [id, [x, y]] of snap.pts) { const p = sk.points.get(id); if (p) { p.x = x; p.y = y; } }
     for (const [id, r] of snap.radii) { const e = sk.entities.get(id); if (e) e.r = r; }
     for (const [id, pos] of snap.dims) { const k = sk.constraints.get(id); if (k) k.pos = { ...pos }; }
+    if (snap.texts) for (const [id, [x, y]] of snap.texts) { const t = sk.texts.get(id); if (t) { t.x = x; t.y = y; } }
   }
   beginDrag(d) {
     const sk = this.sketch;
@@ -790,10 +891,12 @@ export class App {
     if (e && e.type === 'circle') { d.mode = 'radius'; d.circle = e; return; }
     d.mode = 'translate';
     d.ids = new Set();
+    d.texts = new Set();
     for (const id of items) {
       const en = sk.entities.get(id);
       if (en) for (const pid of sk.entityPointIds(en)) d.ids.add(pid);
       else if (sk.points.has(id)) d.ids.add(id);
+      else if (sk.texts.has(id)) d.texts.add(id);
     }
     d.ids.delete(ORIGIN_ID);
   }
@@ -833,7 +936,9 @@ export class App {
       const delta = snapG(sub(wp, d.last));
       if (delta.x === 0 && delta.y === 0) return;
       for (const pid of d.ids) { const p = sk.points.get(pid); if (p) { p.x += delta.x; p.y += delta.y; weights.set(pid, HEAVY); } }
+      for (const tid of d.texts || []) { const t = sk.texts.get(tid); if (t) { t.x += delta.x; t.y += delta.y; } }
       d.pendingLast = add(d.last, delta);
+      if (!d.ids.size) { d.last = d.pendingLast; d.good = this.capturePositions(); return; }    // textes seuls
     }
     const res = solve(sk, { weights, maxIter: 40 });
     if (!res.ok) { this.restorePositions(d.good); return; }
@@ -866,6 +971,10 @@ export class App {
   tapSelect(hit, info = {}) {
     if (!hit) { this.selection.clear(); return; }
     if (info.double && hit.type === 'dim') { this.selection.clear(); this.selection.add(hit.id); this.editDimension(hit.id); return; }
+    if (info.double && hit.type === 'badge' && this.sketch.constraints.get(hit.id)?.type === 'pattern') {
+      this.selection.clear(); this.selection.add(hit.id); this.editPatternCount(hit.id); return;
+    }
+    if (info.double && hit.type === 'text') { this.selection.clear(); this.selection.add(hit.id); this.editTextContent(hit.id); return; }
     if (this.multi) { if (this.selection.has(hit.id)) this.selection.delete(hit.id); else this.selection.add(hit.id); return; }
     if (this.selection.has(hit.id) && this.selection.size === 1) { this.selection.clear(); return; }
     this.selection.clear();
@@ -899,6 +1008,13 @@ export class App {
     }
     for (const p of sk.points.values()) if (p.sketchPoint && inBox(p) && !(H && H.pts.has(p.id))) hit.add(p.id);
     if (!withDims) return hit;
+    for (const t of sk.texts.values()) {
+      if (H && H.texts.has(t.id)) continue;
+      const b = textBox(t);
+      const inside = b.minX >= box.minX && b.maxX <= box.maxX && b.minY >= box.minY && b.maxY <= box.maxY;
+      const touch = b.maxX >= box.minX && b.minX <= box.maxX && b.maxY >= box.minY && b.minY <= box.maxY;
+      if (box.crossing ? touch : inside) hit.add(t.id);
+    }
     // cotes : par leur texte (rectangle écran ramené en monde)
     const a = this.vp.toScreen({ x: box.minX, y: box.maxY }), b = this.vp.toScreen({ x: box.maxX, y: box.minY });
     for (const k of sk.constraints.values()) {
@@ -921,7 +1037,8 @@ export class App {
     const sk = this.sketch;
     for (const id of this.selection) if (sk.constraints.has(id)) sk.removeConstraint(id);
     for (const id of this.selection) {
-      if (sk.entities.has(id)) sk.removeEntity(id);
+      if (sk.texts.has(id)) sk.texts.delete(id);
+      else if (sk.entities.has(id)) sk.removeEntity(id);
       else if (sk.points.has(id) && id !== ORIGIN_ID) sk.removePoint(id);
     }
     this.selection.clear();
@@ -1046,6 +1163,31 @@ export class App {
       const r = e.type === 'circle' ? e.r : dist(sk.points.get(e.c), sk.points.get(e.s));
       this.lengthKeypad(e.type === 'circle' ? 'Rayon du cercle' : 'Rayon de l\'arc', r, (mm) => this.setEntityValue(id, mm));
     }
+  }
+  /** Case d'une répétition (double tap) : nombre d'occurrences au clavier. */
+  editPatternCount(cid) {
+    const k = this.sketch.constraints.get(cid);
+    if (!k || k.type !== 'pattern') return;
+    this.keypad.open({
+      title: 'Nombre d\'occurrences (original compris)', unit: '', initial: String(k.n),
+      validate: (v) => (Number.isInteger(v) && v >= 2 && v <= 500 ? null : 'Un nombre entier, de 2 à 500'),
+      onSubmit: (v) => {
+        if (v === k.n) return;
+        const r = this.applyEdit('Nombre d\'occurrences', (sk) => setPatternCount(sk, cid, v));
+        if (r.ok && this.sketch.constraints.has(cid)) { this.selection.add(cid); this.refreshUI(); }
+      },
+    });
+  }
+  /** Double tap sur un texte : modifier son contenu. */
+  editTextContent(id) {
+    const t = this.sketch.texts.get(id);
+    if (!t) return;
+    askText('Modifier le texte', t.text).then((v) => {
+      const cur = this.sketch.texts.get(id);
+      if (v === null || !cur || v === cur.text) return;
+      cur.text = v;
+      this.commit('Texte modifié');
+    });
   }
   editDimension(cid) {
     const k = this.sketch.constraints.get(cid);

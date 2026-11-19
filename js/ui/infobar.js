@@ -32,7 +32,11 @@ export class InfoBar {
       const e = sketch.entities.get(id);
       const p = sketch.points.get(id);
       const k = sketch.constraints.get(id);
-      if (e && e.type === 'line' && e.infinite) {
+      const t = sketch.texts.get(id);
+      if (t) {
+        main = `Texte « ${t.text.length > 40 ? t.text.slice(0, 39) + '…' : t.text} »`;
+        extra = `Hauteur ${fmtLength(t.size, S)} · double tap : modifier`;
+      } else if (e && e.type === 'line' && e.infinite) {
         const a = sketch.points.get(e.p1), b = sketch.points.get(e.p2);
         main = 'Ligne infinie';
         extra = `Angle ${fmtAngle(normAngle(angleOf(sub(b, a))), S)}`;
@@ -64,6 +68,9 @@ export class InfoBar {
           : k.broken ? 'Valeur impossible : modifiez-la, rendez-la pilotée ou supprimez une relation'
           : over ? 'Sur-contraint : rendez une cote pilotée ou supprimez une relation' : 'Cote pilotante · double tap pour modifier');
         editable = !k.driven;
+      } else if (k && k.type === 'pattern') {
+        main = `Répétition ${k.kind === 'lin' ? 'linéaire' : 'circulaire'} · ${k.n} occurrences`;
+        extra = (k.even ? (k.full ? 'Tour complet · ' : 'Espacement constant · ') : '') + 'double tap sur la case pour changer le nombre · corbeille pour délier les pièces';
       } else if (k) {
         main = `Relation : ${REL_LABEL[k.type] || k.type}`;
         extra = 'Corbeille pour la supprimer';
@@ -105,7 +112,8 @@ function describeMany(sk, selection) {
   const add = (sing, plur) => { const c = counts.get(sing) || { n: 0, plur }; c.n++; counts.set(sing, c); };
   for (const id of selection) {
     const e = sk.entities.get(id), p = sk.points.get(id), k = sk.constraints.get(id);
-    if (e) add(entityName(e), entityName(e, true));
+    if (sk.texts.has(id)) add('Texte', 'Textes');
+    else if (e) add(entityName(e), entityName(e, true));
     else if (p) add(pointName(sk, p), pointName(sk, p, true));
     else if (k && (isDimension(k) || k.type === 'ordZero')) add('Cote', 'Cotes');
     else if (k) add('Relation', 'Relations');

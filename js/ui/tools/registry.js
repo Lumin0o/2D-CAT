@@ -8,6 +8,7 @@ import {
   ToggleConstructionTool, MeasureTool, TrimTool, ExtendTool, OffsetTool, MirrorTool,
   FilletTool, ChamferTool, MoveTool, CopyTool, RotateTool, LinearPatternTool, CircularPatternTool,
 } from './modify.js';
+import { TextTool } from './text.js';
 import { DimensionTool, DimHorizontalTool, DimVerticalTool, DimChainTool, DimOrdinateTool } from './dimension.js';
 
 export const GROUPS = [
@@ -73,6 +74,9 @@ export const GROUPS = [
     { id: 'linearPattern', label: 'Répétition linéaire', sub: 'Le long d\'une ligne ou d\'une cote', icon: 'linPattern' },
     { id: 'circularPattern', label: 'Répétition circulaire', sub: 'Autour d\'un point ou d\'un cercle', icon: 'circPattern' },
   ] },
+  { id: 'text', label: 'Texte', tools: [
+    { id: 'text', label: 'Texte', sub: 'Annotation libre : hauteur et couleur réglables', icon: 'text' },
+  ] },
 ];
 
 export const TOOL_CLASSES = {
@@ -110,6 +114,7 @@ export const TOOL_CLASSES = {
   rotate: RotateTool,
   linearPattern: LinearPatternTool,
   circularPattern: CircularPatternTool,
+  text: TextTool,
 };
 
 const toolIndex = new Map();

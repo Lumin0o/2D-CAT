@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.1.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.2.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -133,6 +133,17 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 - Import DXF : les bouts qui se touchent sont reliés (point commun), comme un contour tracé dans l'app.
 - Réglages : plus de choix du thème pour les couleurs d'état ; les sélecteurs règlent les couleurs du thème affiché.
 
+## Retours iPhone intégrés (0.4.2)
+
+- Répétitions, fenêtre d'options revue :
+  - l'ancien « Espacement constant » s'appelle maintenant **Garder les pièces identiques** (occurrences liées à l'original, même fonctionnement) ;
+  - le nouvel **Espacement constant** grise l'espacement (ou l'angle) et ajoute juste en dessous **Longueur totale** (ou **Angle total**), répartie entre les occurrences, de l'original à la dernière : 1600 mm et 8 occurrences → 7 écarts de 228,57 mm, la dernière à 1600 mm. En circulaire, 360° (par défaut) fait le tour complet : 360° ÷ nombre ;
+  - **Ajouter une cote** n'est plus grisée en espacement constant : elle cote la longueur totale (ou l'angle total s'il est sous 180° ; sinon, et pour un tour complet, l'angle entre deux occurrences). Elle reste grisée sans « Garder les pièces identiques » (des copies libres n'ont pas d'espacement à coter).
+- **Case du nombre d'occurrences** (×8), à côté de la pièce d'origine, dans sa propre couleur (violette par défaut) : elle remplace l'icône ⋯. Un double tap ouvre le clavier pour changer le nombre : les occurrences sont ajoutées ou retirées ; l'espacement est gardé, ou, en espacement constant, la longueur totale (ou le tour complet) et l'espacement est recalculé. Annulable.
+- **Fenêtre d'options réductible** : un bouton à droite de la fenêtre (Décaler, Répétitions, Texte, texte sélectionné) la réduit et la rouvre, comme la barre d'outils ; l'état est gardé d'un outil à l'autre.
+- **Outil Texte** (nouveau groupe « Texte ») : toucher l'endroit, saisir le texte. La fenêtre règle la hauteur (hauteur des lettres, en vraie grandeur) et la couleur (automatique, 7 couleurs ou une couleur au choix) des prochains textes. Toucher un texte (outil Texte, ou sélection simple) ouvre sa fenêtre pour modifier après coup son contenu, sa hauteur, sa couleur ; double tap : modifier le contenu. Un texte se glisse au doigt, se prend au cadre, se supprime, se masque avec l'œil (« Textes »). Hors solveur : il ne change pas l'état de l'esquisse. Exporté en PDF, image et DXF (TEXT, couleur AutoCAD la plus proche, accents en \U+XXXX) ; l'import DXF lit les TEXT.
+- **Réglages › Couleurs** : toutes les couleurs du dessin sont réglables (thème affiché) : états, sélection (orange), tracé en cours, aperçu des modifications (jaune), accrochage, origine, axes, grille, cotes, cotes pilotées, relations, répétitions, Mètre, textes.
+
 ## Tester sur ordinateur
 
 ```sh
@@ -159,9 +170,9 @@ tous les fichiers sont alors en cache.
 
 ## Organisation du code
 
-- `js/core/` : modèle géométrique, requêtes, historique, unités, calculatrice, solveur (couche indépendante), affichage (bouton œil), DXF (`dxf.js`), PDF vectoriel sans bibliothèque (`pdf.js` : contexte façon Canvas qui écrit du PDF)
+- `js/core/` : modèle géométrique (avec les textes), requêtes, historique, unités, calculatrice, solveur (couche indépendante), affichage (bouton œil), DXF (`dxf.js`), PDF vectoriel sans bibliothèque (`pdf.js` : contexte façon Canvas qui écrit du PDF)
 - `js/render/` : fenêtre de vue, rendu Canvas, mise en page des cotes et icônes de relations, rendu d'export (`exporter.js` : PNG, PDF, miniatures avec le même rendu que l'écran)
-- `js/ui/` : gestes, barre d'outils, bandeau, relations, clavier calculatrice, fenêtres, réglages, outils, fichiers (`files.js`), fenêtre modale (`dialog.js`)
+- `js/ui/` : gestes, barre d'outils, bandeau, relations, clavier calculatrice, fenêtres, réglages, outils (dont `tools/text.js`), fichiers (`files.js`), fenêtre modale (`dialog.js`)
 - `js/store/` : IndexedDB et réglages
 - `sw.js` : cache hors ligne. À chaque version, changer `CACHE` et tenir `ASSETS` à jour.
 

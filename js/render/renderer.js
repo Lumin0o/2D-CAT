@@ -1,7 +1,7 @@
 // Rendu Canvas 2D (Retina). Les chemins sont construits en coordonnées monde
 // puis tracés en px écran, pour des épaisseurs de trait constantes.
 import { TAU, arcInfo, niceStep } from '../core/geom.js';
-import { ORIGIN_ID } from '../core/model.js';
+import { ORIGIN_ID, textEm } from '../core/model.js';
 import { isAnnotation } from '../core/solver.js';
 import { dimLayout, dimLabel, layoutBadges, REL_GLYPH } from './annotations.js';
 
@@ -122,6 +122,22 @@ export class Renderer {
     }
     ctx.setLineDash([]);
 
+    // Textes (outil Texte)
+    if (sk.texts && sk.texts.size) {
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      for (const t of sk.texts.values()) {
+        if (H && H.texts && H.texts.has(t.id)) continue;
+        const px = textEm(t.size) * vp.scale;
+        if (!(px > 0.5) || px > 4000) continue;
+        const s = vp.toScreen(t);
+        const selected = sel.has(t.id) || (hl && hl.has(t.id));
+        ctx.font = `${px}px ${FONT}`;
+        ctx.fillStyle = selected ? C.selected : (t.color || C.text || C.full);
+        ctx.fillText(t.text, s.x, s.y);
+      }
+    }
+
     // Cotes
     for (const k of sk.constraints.values()) {
       if (!isAnnotation(k) || (H && H.cons.has(k.id))) continue;
@@ -149,11 +165,16 @@ export class Renderer {
         if (b.x < -20 || b.y < -20 || b.x > vp.width + 20 || b.y > vp.height + 20) continue;
         const selected = sel.has(b.cid);
         const over = an.constraints.get(b.cid) === 'over';
-        ctx.fillStyle = selected ? C.selected : over ? C.over : C.badgeBg;
-        roundRect(ctx, b.x - BADGE_R, b.y - BADGE_R, 2 * BADGE_R, 2 * BADGE_R, 4);
+        // répétition : case du nombre d'occurrences, dans sa propre couleur
+        const pat = b.type === 'pattern';
+        const label = pat ? b.label : (REL_GLYPH[b.type] || '?');
+        const hw = pat ? badgeHalfWidth(ctx, label) : BADGE_R;
+        ctx.fillStyle = selected ? C.selected : over ? C.over : pat ? (C.patternBg || C.badgeBg) : C.badgeBg;
+        roundRect(ctx, b.x - hw, b.y - BADGE_R, 2 * hw, 2 * BADGE_R, 4);
         ctx.fill();
-        ctx.fillStyle = selected || over ? '#ffffff' : C.badgeFg;
-        ctx.fillText(REL_GLYPH[b.type] || '?', b.x, b.y + 0.5);
+        if (pat && !selected && !over) { ctx.strokeStyle = C.patternFg || C.badgeFg; ctx.lineWidth = 1; ctx.stroke(); }
+        ctx.fillStyle = selected || over ? '#ffffff' : pat ? (C.patternFg || C.badgeFg) : C.badgeFg;
+        ctx.fillText(label, b.x, b.y + 0.5);
       }
       ctx.textAlign = 'start';
       ctx.textBaseline = 'alphabetic';
@@ -443,6 +464,9 @@ export class Renderer {
     };
   }
 }
+
+/** Demi-largeur (px) de la case d'une répétition (« ×12 ») ; police déjà réglée. */
+export function badgeHalfWidth(ctx, label) { return Math.max(BADGE_R, ctx.measureText(label).width / 2 + 5); }
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();

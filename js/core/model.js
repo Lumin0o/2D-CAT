@@ -12,7 +12,19 @@
 //   alignées sur la cote 0. Parallèles à une ligne : cote 0 { refs: [référence, ligne], axis: 'a' } et
 //   cotes { type: 'dimAlong', refs: [référence, point, ligne], ord } (distance projetée sur la ligne) ;
 //   perpendiculaires : axis 'p' et dimAlong avec perp: true (projetée sur la perpendiculaire).
+// - textes : { id, x, y, text, size, color } (outil Texte) : annotations libres, hors solveur ; (x, y) est le
+//   début de la ligne de base, size la hauteur des capitales (mm), color null = couleur automatique du thème.
 import { dist, arcBBox } from './geom.js';
+import { textWidth } from './pdf.js';
+
+/** Taille de police (em) d'un texte de hauteur size (hauteur des capitales, comme en CAO). */
+export const textEm = (size) => size / 0.72;
+/** Boîte d'un texte (monde) : largeur Helvetica × hauteur, depuis sa ligne de base. */
+export function textBox(t) {
+  const em = textEm(t.size);
+  const w = textWidth(String(t.text), em);
+  return { minX: t.x, minY: t.y - 0.22 * em, maxX: t.x + w, maxY: t.y + 0.78 * em };
+}
 
 export const ORIGIN_ID = 'origin';
 export const MODEL_VERSION = 1;
@@ -22,6 +34,7 @@ export class Sketch {
     this.points = new Map();
     this.entities = new Map();
     this.constraints = new Map();
+    this.texts = new Map();
     this.seq = 1;
     this.ensureOrigin();
   }
@@ -63,6 +76,13 @@ export class Sketch {
   }
   getEntity(id) { return this.entities.get(id); }
 
+  // ----- Textes -----
+  addText(x, y, text, { size = 5, color = null } = {}) {
+    const t = { id: this.newId('t'), x, y, text: String(text), size, color };
+    this.texts.set(t.id, t);
+    return t;
+  }
+
   // ----- Contraintes -----
   addConstraint(type, refs, extra = {}) {
     const k = { id: this.newId('c'), type, refs: [...refs], ...extra };
@@ -91,7 +111,7 @@ export class Sketch {
     return out;
   }
   isEmpty() {
-    if (this.entities.size > 0) return false;
+    if (this.entities.size > 0 || this.texts.size > 0) return false;
     for (const p of this.points.values()) if (p.sketchPoint) return false;
     return true;
   }
@@ -164,6 +184,7 @@ export class Sketch {
       }
     }
     for (const p of this.points.values()) if (p.sketchPoint) grow(p.x, p.y);
+    for (const t of this.texts.values()) { const q = textBox(t); grow(q.minX, q.minY); grow(q.maxX, q.maxY); }
     return b;
   }
 
@@ -175,6 +196,7 @@ export class Sketch {
       points: [...this.points.values()],
       entities: [...this.entities.values()],
       constraints: [...this.constraints.values()],
+      ...(this.texts.size ? { texts: [...this.texts.values()] } : {}),
     };
   }
   static fromJSON(j) {
@@ -184,6 +206,7 @@ export class Sketch {
     s.points = new Map((j.points || []).map((p) => [p.id, { ...p }]));
     s.entities = new Map((j.entities || []).map((e) => [e.id, { ...e }]));
     s.constraints = new Map((j.constraints || []).map((k) => [k.id, { ...k, refs: [...(k.refs || [])] }]));
+    s.texts = new Map((j.texts || []).filter((t) => t && isFinite(t.x) && isFinite(t.y)).map((t) => [t.id, { ...t }]));
     s.ensureOrigin();
     // Nettoyage défensif : entités dont les points manquent
     for (const [id, e] of s.entities) {

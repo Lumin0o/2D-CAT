@@ -755,10 +755,15 @@ export function transformSelection(sk, ids, f, { copy = false, angle = 0 } = {})
  * Répète les entités ids (et points isolés) :
  *   kind 'lin'  : translation de step × i le long de dir (vecteur unitaire), i = 1 … count-1 ;
  *   kind 'circ' : rotation de step × i (radians, signé) autour du point center.
- * link : « espacement constant » — une relation de répétition garde toutes les occurrences identiques à l'original
- *   et régulièrement espacées (l'espacement reste réglable par la cote, ou au doigt) ;
+ * link : « garder les pièces identiques » — une relation de répétition garde toutes les occurrences identiques à
+ *   l'original et régulièrement espacées (l'espacement reste réglable par la cote, ou au doigt) ;
  *   sinon, simples copies (avec les relations internes de la sélection, sans les cotes).
- * dim : ajoute la cote d'espacement (distance, ou angle entre deux lignes de construction partant du centre).
+ * even : « espacement constant » — step a été calculé depuis une longueur (un angle) totale, de l'original à la
+ *   dernière occurrence ; full : répétition circulaire sur un tour complet (step = 360° / count).
+ *   Retenu par la relation : changer le nombre d'occurrences garde la longueur totale (ou le tour complet).
+ * dim : ajoute la cote — de l'espacement, ou (even) de la longueur / de l'angle total ; distance, ou angle entre
+ *   deux lignes de construction partant du centre. Tour complet (ou angle total ≥ 180°) : cote de l'angle entre
+ *   deux occurrences.
  * axis : ligne qui donne la direction (gardée par la relation), sinon dir reste fixe.
  * @returns {{ok:boolean, msg?:string, ids?:string[]}}
  */
@@ -779,23 +784,8 @@ export function patternEntities(sk, ids, o) {
   const made = [];
   const inst = [];
   for (let i = 1; i < n; i++) {
-    const map = new Map(), emap = new Map();
-    const T = f(i);
-    for (const pid of ptList) {
-      if (shared(pid)) { map.set(pid, pid); continue; }
-      const p = P(sk, pid), q = T(p);
-      const np = sk.addPoint(q.x, q.y);
-      if (p.sketchPoint) np.sketchPoint = true;
-      map.set(pid, np.id);
-    }
-    for (const eid of entList) {
-      const e = sk.entities.get(eid);
-      const ne = { ...e, id: sk.newId('e') };
-      for (const key of ['p1', 'p2', 'c', 's', 'e']) if (key in ne && map.has(ne[key])) ne[key] = map.get(ne[key]);
-      sk.entities.set(ne.id, ne);
-      emap.set(eid, ne.id);
-      made.push(ne.id);
-    }
+    const { map, emap } = copyInstance(sk, ptList, entList, f(i), shared);
+    made.push(...emap.values());
     if (!o.link) {
       // copies libres : relations internes de la sélection (pas les cotes)
       for (const k of [...sk.constraints.values()]) {
@@ -824,7 +814,9 @@ export function patternEntities(sk, ids, o) {
   for (const { map } of inst) for (const pid of mPts) refs.push(map.get(pid));
   refs.push(...circles);
   for (const { emap } of inst) for (const cid of circles) refs.push(emap.get(cid));
-  const extra = {};
+  const extra = { tpl: [...entList] };
+  if (o.even) extra.even = true;
+  if (o.even && o.full) extra.full = true;
   if (lin) {
     if (o.axis && sk.entities.has(o.axis)) { extra.axis = o.axis; if (!refs.includes(o.axis)) refs.push(o.axis); }
     else extra.dir = { x: o.dir.x, y: o.dir.y };
@@ -832,24 +824,188 @@ export function patternEntities(sk, ids, o) {
     extra.center = o.center;
     if (!refs.includes(o.center)) refs.push(o.center);
   }
-  sk.addConstraint('pattern', refs, { kind: o.kind, m: mPts.length, n, mc: circles.length, r, ...extra });
+  const pat = sk.addConstraint('pattern', refs, { kind: o.kind, m: mPts.length, n, mc: circles.length, r, ...extra });
+  if (o.dim) addPatternDim(sk, pat, o.gap);
+  return { ok: true, ids: made };
+}
 
-  if (o.dim) {
-    const a = mPts[r], b = inst[0].map.get(a);
-    const A = P(sk, a), B = P(sk, b);
-    const gap = o.gap || Math.abs(o.step) * 0.3;
-    if (lin) {
-      const nrm = perp(o.dir);
-      sk.addConstraint('dimDistance', [a, b], { value: Math.abs(o.step), pos: add(mid(A, B), mul(nrm, gap)) });
-    } else {
-      const la = sk.addLine(o.center, a, { construction: true }), lb = sk.addLine(o.center, b, { construction: true });
-      const ra = sub(A, C), rb = sub(B, C);
-      const ang = Math.atan2(cross(ra, rb), dot(ra, rb));
-      const bis = norm(add(norm(ra), norm(rb)));
-      const R = Math.min(dist(A, C), dist(B, C)) * 0.6;
-      const pos = Math.hypot(bis.x, bis.y) > 1e-9 ? add(C, mul(bis, R)) : add(C, mul(perp(norm(ra)), R));
-      sk.addConstraint('dimAngle', [la.id, lb.id], { value: Math.abs(ang), s1: 1, s2: 1, sgn: ang < 0 ? -1 : 1, pos });
+/** Copie de l'occurrence : points transformés par T (sauf les points partagés), entités reliées aux copies. */
+function copyInstance(sk, ptList, entList, T, shared) {
+  const map = new Map(), emap = new Map();
+  for (const pid of ptList) {
+    if (shared(pid)) { map.set(pid, pid); continue; }
+    const p = P(sk, pid), q = T(p);
+    const np = sk.addPoint(q.x, q.y);
+    if (p.sketchPoint) np.sketchPoint = true;
+    map.set(pid, np.id);
+  }
+  for (const eid of entList) {
+    const e = sk.entities.get(eid);
+    if (!e) continue;
+    const ne = { ...e, id: sk.newId('e') };
+    for (const key of ['p1', 'p2', 'c', 's', 'e']) if (key in ne && map.has(ne[key])) ne[key] = map.get(ne[key]);
+    sk.entities.set(ne.id, ne);
+    emap.set(eid, ne.id);
+  }
+  return { map, emap };
+}
+
+/** Point de l'occurrence i, indice j (relation de répétition). */
+const patPt = (k, i, j) => k.refs[i * k.m + j];
+/** Pas actuel de la répétition : vecteur (linéaire) ou angle signé (circulaire), mesuré sur l'occurrence 1. */
+export function patternStep(sk, k) {
+  const j = k.r || 0;
+  const a = P(sk, patPt(k, 0, j)), b = P(sk, patPt(k, 1, j));
+  if (k.kind === 'lin') return sub(b, a);
+  const c = P(sk, k.center);
+  const ra = sub(a, c), rb = sub(b, c);
+  return Math.atan2(cross(ra, rb), dot(ra, rb));
+}
+
+/** Cote de la répétition : espacement, ou total (original → dernière occurrence) en espacement constant. */
+function addPatternDim(sk, k, gap0) {
+  const j = k.r || 0;
+  const lin = k.kind === 'lin';
+  const step = patternStep(sk, k);
+  // espacement constant : cote du total (original → dernière occurrence), sauf tour complet ou angle ≥ 180°
+  const total = !!k.even && !k.full && (lin || Math.abs(step) * (k.n - 1) < Math.PI - 1e-3);
+  if (total) k.dimTotal = true;
+  const a = patPt(k, 0, j), b = patPt(k, total ? k.n - 1 : 1, j);
+  const A = P(sk, a), B = P(sk, b);
+  if (lin) {
+    const u = norm(step);
+    const gap = gap0 || dist(A, B) * 0.3;
+    const d = sk.addConstraint('dimDistance', [a, b], { value: dist(A, B), pos: add(mid(A, B), mul(perp(u), gap)) });
+    k.dim = d.id;
+    return d;
+  }
+  const C = P(sk, k.center);
+  const la = sk.addLine(k.center, a, { construction: true }), lb = sk.addLine(k.center, b, { construction: true });
+  const ra = sub(A, C), rb = sub(B, C);
+  const ang = Math.atan2(cross(ra, rb), dot(ra, rb));
+  const bis = norm(add(norm(ra), norm(rb)));
+  const R = Math.min(dist(A, C), dist(B, C)) * 0.6;
+  const pos = Math.hypot(bis.x, bis.y) > 1e-9 ? add(C, mul(bis, R)) : add(C, mul(perp(norm(ra)), R));
+  const d = sk.addConstraint('dimAngle', [la.id, lb.id], { value: Math.abs(ang), s1: 1, s2: 1, sgn: ang < 0 ? -1 : 1, pos });
+  k.dim = d.id;
+  k.dimLines = [la.id, lb.id];
+  return d;
+}
+
+/** Entités de l'original (anciennes répétitions sans liste : retrouvées par leurs points). */
+function patternTemplate(sk, k) {
+  if (Array.isArray(k.tpl)) return k.tpl.filter((id) => sk.entities.has(id));
+  const S0 = new Set(k.refs.slice(0, k.m));
+  if (k.kind !== 'lin') S0.add(k.center);
+  const dimLines = new Set(k.dimLines || []);
+  const out = [];
+  for (const e of sk.entities.values()) {
+    const pids = sk.entityPointIds(e);
+    if (!pids.every((p) => S0.has(p)) || (k.kind !== 'lin' && pids.every((p) => p === k.center))) continue;
+    if (dimLines.has(e.id) || e.id === k.axis) continue;
+    if (k.kind !== 'lin' && e.type === 'line' && e.construction && (e.p1 === k.center || e.p2 === k.center)
+      && sk.constraintsOf(e.id).some((q) => q.type === 'dimAngle')) continue;    // ligne de la cote d'angle
+    out.push(e.id);
+  }
+  return out;
+}
+
+/** Entité de l'occurrence i qui correspond à l'entité e de l'original (mêmes points, transposés), ou null. */
+function counterpart(sk, k, e, i) {
+  const idx = new Map(k.refs.slice(0, k.m).map((pid, j) => [pid, j]));
+  const mapPt = (pid) => (idx.has(pid) ? patPt(k, i, idx.get(pid)) : pid);
+  const want = sk.entityPointIds(e).map(mapPt);
+  for (const q of sk.entities.values()) {
+    if (q.type !== e.type || q.id === e.id) continue;
+    const pids = sk.entityPointIds(q);
+    if (pids.length === want.length && pids.every((p, t) => p === want[t])) return q;
+  }
+  return null;
+}
+
+/**
+ * Change le nombre d'occurrences d'une répétition liée (relation cid), original compris.
+ * L'espacement est gardé ; en espacement constant, c'est la longueur (l'angle) totale ou le tour complet qui
+ * est gardé, et l'espacement est recalculé. La cote suit.
+ * @returns {{ok:boolean, msg?:string}}
+ */
+export function setPatternCount(sk, cid, count) {
+  const k = sk.constraints.get(cid);
+  if (!k || k.type !== 'pattern') return { ok: false, msg: 'Répétition introuvable' };
+  const n = k.n, n2 = Math.round(count), m = k.m, mc = k.mc || 0;
+  if (!(n2 >= 2)) return { ok: false, msg: 'Au moins 2 occurrences' };
+  if (n2 === n) return { ok: true };
+  const lin = k.kind === 'lin';
+  const C = lin ? null : P(sk, k.center);
+  if (!lin && !C) return { ok: false, msg: 'Centre introuvable' };
+  const tpl = patternTemplate(sk, k);
+  const total = !!k.dimTotal;
+  const dimK = k.dim ? sk.constraints.get(k.dim) : null;
+
+  // nouveau pas
+  const step = patternStep(sk, k);
+  let step2 = step;
+  if (k.even) {
+    if (lin) step2 = mul(step, (n - 1) / (n2 - 1));
+    else step2 = k.full ? Math.sign(step || 1) * 2 * Math.PI / n2 : step * (n - 1) / (n2 - 1);
+  }
+
+  let pts = k.refs.slice(0, m * n);
+  let circs = k.refs.slice(m * n, m * n + mc * n);
+  const tail = k.refs.slice(m * n + mc * n);
+  sk.constraints.delete(cid);          // retirée le temps des suppressions (sinon supprimée avec les copies)
+  if (n2 < n) {
+    // la cote du total passe sur la nouvelle dernière occurrence avant la suppression des suivantes
+    if (total && dimK) retargetTotalDim(sk, k, dimK, n2 - 1);
+    for (let i = n2; i < n; i++) {
+      for (const eid of tpl) { const e = sk.entities.get(eid); const q = e && counterpart(sk, k, e, i); if (q) sk.removeEntity(q.id); }
+      for (let j = 0; j < m; j++) { const pid = patPt(k, i, j); if (sk.points.has(pid) && pid !== ORIGIN_ID) sk.removePoint(pid); }
+    }
+    pts = pts.slice(0, m * n2);
+    circs = circs.slice(0, mc * n2);
+  } else {
+    const S0 = k.refs.slice(0, m);
+    const ptList = lin ? S0 : [...S0, k.center];
+    const shared = (pid) => !lin && pid === k.center;
+    const circleTpl = k.refs.slice(m * n, m * n + mc);
+    for (let i = n; i < n2; i++) {
+      const T = lin ? translation(mul(step, i)) : rotation(C, step * i);
+      const { map, emap } = copyInstance(sk, ptList, tpl, T, shared);
+      for (const pid of S0) pts.push(map.get(pid));
+      for (const ocid of circleTpl) circs.push(emap.get(ocid) || null);
+    }
+    if (circs.some((x) => !x)) { sk.constraints.set(cid, k); return { ok: false, msg: 'Répétition incomplète' }; }
+  }
+  k.n = n2;
+  k.refs = [...pts, ...circs, ...tail];
+  sk.constraints.set(cid, k);
+  if (n2 > n && total && dimK) retargetTotalDim(sk, k, dimK, n2 - 1);
+
+  // positions : chaque occurrence = original transformé avec le nouveau pas (le solveur termine)
+  for (let i = 1; i < n2; i++) {
+    const T = lin ? translation(mul(step2, i)) : rotation(C, step2 * i);
+    for (let j = 0; j < m; j++) {
+      const q = P(sk, patPt(k, i, j)), o = P(sk, patPt(k, 0, j));
+      if (q && o && !q.fixed) Object.assign(q, T(o));
+    }
+    for (let j = 0; j < mc; j++) {
+      const oc = sk.entities.get(k.refs[m * n2 + j]), qc = sk.entities.get(k.refs[m * n2 + i * mc + j]);
+      if (oc && qc) qc.r = oc.r;
     }
   }
-  return { ok: true, ids: made };
+  // cote de l'espacement : nouvelle valeur (espacement constant) ; cote du total : inchangée
+  if (dimK && !total && k.even) {
+    dimK.value = lin ? Math.hypot(step2.x, step2.y) : Math.abs(step2);
+    delete dimK.broken;
+  }
+  return { ok: true };
+}
+
+/** Cote du total : mesurée jusqu'à l'occurrence last (sa ligne de construction aussi, en circulaire). */
+function retargetTotalDim(sk, k, dimK, last) {
+  const j = k.r || 0;
+  const b = patPt(k, last, j);
+  if (k.kind === 'lin') { dimK.refs = [dimK.refs[0], b]; return; }
+  const lb = sk.entities.get(dimK.refs[1]);
+  if (lb && lb.type === 'line') { if (lb.p1 === k.center) lb.p2 = b; else lb.p1 = b; }
 }

@@ -79,7 +79,7 @@ const nothing = () => showToast('Rien à exporter : l\'esquisse est vide (ou tou
 export function exportDXFFile(app) {
   const unit = app.settings.get('unit');
   const H = app.hidden();
-  const { text, count } = exportDXF(app.sketch, { unit, skip: (e) => !!(H && H.ents.has(e.id)) });
+  const { text, count } = exportDXF(app.sketch, { unit, skip: (e) => !!(H && H.ents.has(e.id)), skipText: (t) => !!(H && H.texts && H.texts.has(t.id)) });
   if (!count) { nothing(); return; }
   shareFile(new TextEncoder().encode(text), exportName(app) + '.dxf', ['application/dxf', 'image/vnd.dxf', 'application/octet-stream', 'text/plain'])
     .then((shown) => { if (shown) showToast(`DXF : ${count} entité${count > 1 ? 's' : ''}, en ${(UNITS[unit] || UNITS.mm).label}`); });
@@ -158,14 +158,14 @@ export function importDXFFile(app) {
 /** Ajoute le contenu d'un DXF à l'esquisse en cours (annulable). */
 export function importDXFText(app, text, name = 'DXF') {
   const r = parseDXF(text, { defaultUnit: app.settings.get('unit') });
-  if (!r.items.length) { showToast('Aucune ligne, cercle ou arc dans ce fichier', { error: true, ms: 3000 }); return 0; }
+  if (!r.items.length) { showToast('Aucune ligne, cercle, arc ou texte dans ce fichier', { error: true, ms: 3000 }); return 0; }
   if (app.tool) app.setTool(null);
   const ids = addImported(app.sketch, r.items);
   app.selection.clear();
   app.commit('Import DXF');
   app.fitAll();
   const ignored = Object.values(r.skipped).reduce((n, c) => n + c, 0);
-  showToast(`${name} : ${ids.length} entité${ids.length > 1 ? 's' : ''} importée${ids.length > 1 ? 's' : ''}` + (ignored ? ` · ${ignored} élément${ignored > 1 ? 's' : ''} ignoré${ignored > 1 ? 's' : ''} (textes, hachures…)` : '') + (r.unitKnown ? '' : ' · unité non précisée : ' + (UNITS[app.settings.get('unit')] || UNITS.mm).label), { ms: 3500 });
+  showToast(`${name} : ${ids.length} élément${ids.length > 1 ? 's' : ''} importé${ids.length > 1 ? 's' : ''}` + (ignored ? ` · ${ignored} ignoré${ignored > 1 ? 's' : ''} (hachures, cotes, blocs…)` : '') + (r.unitKnown ? '' : ' · unité non précisée : ' + (UNITS[app.settings.get('unit')] || UNITS.mm).label), { ms: 3500 });
   return ids.length;
 }
 

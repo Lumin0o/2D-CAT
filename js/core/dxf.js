@@ -1,6 +1,6 @@
 // DXF : export (lignes, cercles, arcs en vraie grandeur) et import (lignes, cercles, arcs, polylignes simples).
 // Format ASCII AutoCAD 2000 (AC1015), complet (tables, blocs, objets), ouvert par AutoCAD et les autres logiciels
-// de CAO. La géométrie interne est en mm. Export : construction sur le calque « CONSTRUCTION ».
+// de CAO. La géométrie interne est en mm. Export : construction sur le calque « CONSTRUCTION », textes en TEXT.
 import { arcInfo, arcBBox } from './geom.js';
 import { DXF_TEMPLATE, MSP_OWNER, FIRST_HANDLE } from './dxfTemplate.js';
 
@@ -18,6 +18,39 @@ const num = (v) => {
 };
 const deg = (rad) => { let d = rad * 180 / Math.PI; d = ((d % 360) + 360) % 360; return d; };
 
+/** Couleurs AutoCAD (ACI) de base, pour les textes : code → [r, g, b]. */
+const ACI = { 1: [255, 0, 0], 2: [255, 255, 0], 3: [0, 255, 0], 4: [0, 255, 255], 5: [0, 0, 255], 6: [255, 0, 255], 7: [0, 0, 0], 8: [128, 128, 128], 9: [192, 192, 192], 30: [255, 127, 0], 40: [255, 191, 0], 140: [0, 127, 255], 200: [127, 0, 255], 210: [191, 0, 255] };
+const ACI_HEX = { 1: '#ff3b30', 2: '#ffcc00', 3: '#34c759', 4: '#32ade6', 5: '#0a6cff', 6: '#ff2d92', 30: '#ff9500', 40: '#ffb800', 140: '#0a84ff', 200: '#8a3ccf', 210: '#af52de', 8: '#8e8e93', 9: '#c7c7cc' };
+/** Code ACI le plus proche d'une couleur #rrggbb (null : couleur du calque). */
+function aciOf(hex) {
+  if (!hex) return null;
+  const h = String(hex).replace('#', '');
+  const c = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  if (c.some((v) => Number.isNaN(v))) return null;
+  let best = 7, bd = Infinity;
+  for (const [k, v] of Object.entries(ACI)) {
+    const d = (v[0] - c[0]) ** 2 + (v[1] - c[1]) ** 2 + (v[2] - c[2]) ** 2;
+    if (d < bd) { bd = d; best = +k; }
+  }
+  return best === 7 ? null : best;
+}
+/** Texte DXF : caractères hors ASCII en \U+XXXX (compris par AutoCAD quelle que soit la page de code). */
+function dxfText(str) {
+  let out = '';
+  for (const ch of String(str).replace(/[\r\n]+/g, ' ')) {
+    const c = ch.codePointAt(0);
+    out += c >= 32 && c < 127 ? ch : c > 0xffff ? '?' : '\\U+' + c.toString(16).toUpperCase().padStart(4, '0');
+  }
+  return out;
+}
+/** Texte lu dans un DXF : \U+XXXX, %%d (°), %%c (Ø), %%p (±), %%% (%). */
+function readDxfText(s) {
+  return String(s)
+    .replace(/\\U\+([0-9a-fA-F]{4})/g, (m, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/%%[dD]/g, '°').replace(/%%[cC]/g, 'Ø').replace(/%%[pP]/g, '±').replace(/%%%/g, '%')
+    .replace(/%%[uUoOkK]/g, '');
+}
+
 /**
  * Entités exportées : lignes, cercles et arcs, construction comprise (calque « CONSTRUCTION », en tirets ;
  * lignes infinies en XLINE). skip(e) : true pour une entité à ne pas exporter (ex. masquée).
@@ -30,7 +63,7 @@ export function exportableEntities(sk, skip = null) {
  * Texte DXF de l'esquisse (AutoCAD 2000, AC1015), en unité `unit` (mm par défaut).
  * @returns {{text:string, count:number}}
  */
-export function exportDXF(sk, { unit = 'mm', skip = null } = {}) {
+export function exportDXF(sk, { unit = 'mm', skip = null, skipText = null } = {}) {
   const f = UNIT_FACTOR[unit] || 1;
   const P = (id) => sk.points.get(id);
   const out = [];
@@ -80,6 +113,20 @@ export function exportDXF(sk, { unit = 'mm', skip = null } = {}) {
     } else continue;
     count++;
   }
+  // textes (outil Texte) : TEXT, hauteur = hauteur des capitales, couleur ACI la plus proche
+  if (sk.texts) for (const t of sk.texts.values()) {
+    if (skipText && skipText(t)) continue;
+    if (!String(t.text).trim()) continue;
+    head('TEXT', '0', 'AcDbText');
+    const aci = aciOf(t.color);
+    if (aci !== null) { const sub = out.splice(out.length - 2, 2); g(62, aci); out.push(...sub); }
+    g(10, num(t.x / f)); g(20, num(t.y / f)); g(30, 0); g(40, num(t.size / f));
+    g(1, dxfText(t.text)); g(7, 'Standard');
+    g(100, 'AcDbText');
+    const w = 0.75 * t.size * [...String(t.text)].length;
+    grow(t.x / f, t.y / f); grow((t.x + w) / f, (t.y + t.size) / f);
+    count++;
+  }
   if (!ext) ext = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   const w = ext.maxX - ext.minX, h = ext.maxY - ext.minY;
   const text = DXF_TEMPLATE
@@ -111,7 +158,8 @@ function pairs(text) {
  * Les entités de l'espace papier et des blocs sont ignorées.
  * defaultUnit : unité supposée si le fichier ne la précise pas.
  * @returns {{items:Array, unitMM:number, skipped:Object<string,number>, unitKnown:boolean}}
- *   items : { type:'line', a, b } | { type:'circle', c, r } | { type:'arc', c, s, e, ccw } en mm
+ *   items : { type:'line', a, b } | { type:'circle', c, r } | { type:'arc', c, s, e, ccw }
+ *           | { type:'text', x, y, text, size, color } en mm
  */
 export function parseDXF(text, { defaultUnit = 'mm' } = {}) {
   const P = pairs(text);
@@ -206,6 +254,11 @@ export function parseDXF(text, { defaultUnit = 'mm' } = {}) {
       i = j - 1;
       if (flags & (16 | 64)) { skipped.POLYLINE = (skipped.POLYLINE || 0) + 1; continue; }   // maillages 3D
       polyline(verts, (flags & 1) === 1, flip);
+    } else if (type === 'TEXT') {
+      const str = readDxfText((props.find((q) => q[0] === 1) || [1, ''])[1]);
+      const h = S(get(props, 40, 2.5));
+      const aci = parseInt((props.find((q) => q[0] === 62) || [62, '256'])[1], 10);
+      if (str.trim() && h > 1e-12) items.push({ type: 'text', x: X(get(props, 10)), y: S(get(props, 20)), text: str, size: h, color: ACI_HEX[aci] || null });
     } else if (type !== 'VERTEX' && type !== 'SEQEND') {
       skipped[type] = (skipped[type] || 0) + 1;
     }
@@ -225,7 +278,7 @@ export function addImported(sk, items, { join = true } = {}) {
   const ids = [];
   // tolérance : un millionième de la taille du dessin (au moins 1e-6 mm)
   let span = 0;
-  for (const it of items) for (const p of [it.a, it.b, it.c, it.s, it.e]) if (p) span = Math.max(span, Math.abs(p.x), Math.abs(p.y));
+  for (const it of items) for (const p of [it.a, it.b, it.c, it.s, it.e, it.type === 'text' ? it : null]) if (p) span = Math.max(span, Math.abs(p.x), Math.abs(p.y));
   const tol = Math.max(1e-6, span * 1e-7);
   const ends = [];              // points d'extrémité déjà créés
   const cell = (v) => Math.round(v / (tol * 4));
@@ -247,6 +300,7 @@ export function addImported(sk, items, { join = true } = {}) {
   const free = (p) => sk.addPoint(p.x, p.y).id;
   for (const it of items) {
     const opts = { construction: !!it.construction, infinite: !!it.infinite };
+    if (it.type === 'text') { ids.push(sk.addText(it.x, it.y, it.text, { size: it.size, color: it.color }).id); continue; }
     if (it.type === 'line') ids.push(sk.addLine(it.infinite ? free(it.a) : endPoint(it.a), it.infinite ? free(it.b) : endPoint(it.b), opts).id);
     else if (it.type === 'circle') ids.push(sk.addCircle(free(it.c), it.r, opts).id);
     else if (it.type === 'arc') {

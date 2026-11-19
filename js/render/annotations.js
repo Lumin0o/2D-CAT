@@ -4,6 +4,7 @@ import { sub, add, mul, dot, cross, norm, perp, dist, angleOf, fromAngle, arcInf
 import { fmtLengthShort, fmtAngle } from '../core/units.js';
 import { isAnnotation } from '../core/solver.js';
 import { entityDistance } from '../core/query.js';
+import { textBox } from '../core/model.js';
 
 const P = (sk, id) => sk.points.get(id);
 const curveOf = (sk, e) => { const c = P(sk, e.c); return { c, r: e.type === 'circle' ? e.r : dist(c, P(sk, e.s)) }; };
@@ -284,9 +285,17 @@ export function layoutBadges(sk, vp, hidden = null) {
   // éléments masqués (bouton œil) : ni icône, ni obstacle
   const ents = [...sk.entities.values()].filter((e) => !hidden || !hidden.ents.has(e.id));
   const pts = [...sk.points.values()].filter((p) => !hidden || !hidden.pts.has(p.id)).map((p) => vp.toScreen(p));
+  // textes (outil Texte) : rectangles écran à éviter
+  const tboxes = [];
+  if (sk.texts) for (const t of sk.texts.values()) {
+    if (hidden && hidden.texts && hidden.texts.has(t.id)) continue;
+    const b = textBox(t), A = vp.toScreen({ x: b.minX, y: b.maxY }), B = vp.toScreen({ x: b.maxX, y: b.minY });
+    tboxes.push([A.x - R - 2, A.y - R - 2, B.x + R + 2, B.y + R + 2]);
+  }
   const free = (x, y) => {
     for (const b of out) if (Math.abs(b.x - x) < 2 * R + 2 && Math.abs(b.y - y) < 2 * R + 2) return false;
     for (const q of pts) if (Math.abs(q.x - x) < R + 5 && Math.abs(q.y - y) < R + 5) return false;
+    for (const [x0, y0, x1, y1] of tboxes) if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return false;
     const w = vp.toWorld({ x, y });
     for (const e of ents) if (entityDistance(sk, e, w) < tolE) return false;
     return true;
@@ -331,7 +340,13 @@ export function layoutBadges(sk, vp, hidden = null) {
     if (isAnnotation(k) || (hidden && hidden.cons.has(k.id))) continue;
     if (k.type === 'coincident' || k.type === 'midpoint') { atPoint(k.id, k.type, k.refs[0]); continue; }
     if (k.type === 'symmetric') { atPoint(k.id, k.type, k.refs[0]); atPoint(k.id, k.type, k.refs[1]); continue; }
-    if (k.type === 'pattern') { atPoint(k.id, k.type, k.refs[k.m + (k.r || 0)]); continue; }    // une icône, sur la 1re occurrence
+    if (k.type === 'pattern') {
+      // case du nombre d'occurrences, à côté de l'original
+      const before = out.length;
+      atPoint(k.id, k.type, k.refs[k.r || 0]);
+      if (out.length > before) out[out.length - 1].label = '×' + k.n;
+      continue;
+    }
     if (k.type === 'offsetEq') { const e = sk.entities.get(k.refs[3]); if (e) atEntity(k.id, k.type, e); continue; }
     for (const r of k.refs) {
       const e = sk.entities.get(r);

@@ -462,11 +462,27 @@ button.row { width: 100%; text-align: left; }
 /* Options de l'outil en cours (ex. Décaler) : petite fenêtre sous la barre d'outils */
 .toolopts {
   position: absolute; top: 8px; left: 8px; z-index: 5;
-  width: 290px; max-width: calc(100% - 62px);
+  width: 290px; max-width: calc(100% - 104px);
+  max-height: calc(100% - 70px); overflow-y: auto;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
   box-shadow: 0 4px 14px rgba(0,0,0,.18);
-  overflow: hidden;
 }
+/* bouton qui réduit / rouvre la fenêtre d'options, juste à sa droite */
+.toolopts-toggle { position: absolute; top: 8px; left: calc(14px + min(290px, 100% - 104px)); z-index: 6; }
+.app.fullscreen .toolopts-toggle { opacity: .55; box-shadow: none; }
+.app.fullscreen .toolopts-toggle.on { opacity: 1; }
+/* couleur d'un texte : pastilles */
+.topt-row.topt-colors { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 10px; }
+.topt-colors .topt-label { align-items: flex-start; text-align: left; }
+.topt-swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+.topt-swatch {
+  position: relative; width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface2);
+  display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+}
+.topt-swatch.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.topt-swatch.custom { background: conic-gradient(#ff3b30, #ffcc00, #34c759, #0a84ff, #af52de, #ff3b30); overflow: hidden; }
+.topt-swatch.custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; border: 0; padding: 0; }
 .topt-row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   width: 100%; min-height: 42px; padding: 4px 10px; text-align: left;

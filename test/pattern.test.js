@@ -1,7 +1,7 @@
 // Répétitions linéaire et circulaire.
 import { Sketch, ORIGIN_ID } from '../js/core/model.js';
 import { solve, analyze } from '../js/core/solver.js';
-import { patternEntities } from '../js/core/edit.js';
+import { patternEntities, setPatternCount } from '../js/core/edit.js';
 
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; print('FAIL: ' + m); } else print('ok: ' + m); };
@@ -99,6 +99,95 @@ function rect(sk, x0 = 0, y0 = 0) {
   const types = [...sk.constraints.values()].map((k) => k.type);
   ok(types.filter((t) => t === 'horizontal').length === 4 && types.filter((t) => t === 'dimLength').length === 2 && !types.includes('pattern'), 'relations copiées, cotes non copiées, pas de relation de répétition');
   ok(solve(sk).ok && analyze(sk).over.size === 0, 'pas de sur-contrainte');
+}
+
+// espacement constant linéaire : 1600 mm, 8 occurrences → pas de 1600 / 7 ; cote du total ; le nombre change
+{
+  const sk = new Sketch();
+  const { L } = rect(sk);
+  const total = 1600, n = 8;
+  const r = patternEntities(sk, L.map((l) => l.id), { kind: 'lin', dir: { x: 1, y: 0 }, step: total / (n - 1), count: n, link: true, dim: true, even: true });
+  ok(r.ok, 'espacement constant créé');
+  ok(solve(sk).ok, 'résolu');
+  const pat = [...sk.constraints.values()].find((k) => k.type === 'pattern');
+  const dim = sk.constraints.get(pat.dim);
+  ok(pat.even && pat.dimTotal && dim && near(dim.value, 1600), 'cote du total 1600 (' + (dim && dim.value) + ')');
+  const lastX = () => sk.points.get(pat.refs[(pat.n - 1) * pat.m + (pat.r || 0)]).x;
+  ok(near(lastX(), 1600), 'dernière occurrence à 1600');
+  ok(analyze(sk).over.size === 0, 'pas de sur-contrainte');
+  // 8 → 5 occurrences : la longueur totale est gardée, pas de 400
+  let s = setPatternCount(sk, pat.id, 5);
+  ok(s.ok && solve(sk).ok, '5 occurrences ' + (s.msg || ''));
+  ok(pat.n === 5 && near(lastX(), 1600), 'toujours 1600 au bout (' + lastX() + ')');
+  ok(sk.entities.size === 4 * 5, '20 lignes (' + sk.entities.size + ')');
+  ok(near(sk.points.get(pat.refs[1 * pat.m + (pat.r || 0)]).x, 400), 'pas de 400');
+  ok(analyze(sk).over.size === 0, 'pas de sur-contrainte après réduction');
+  // 5 → 11
+  s = setPatternCount(sk, pat.id, 11);
+  ok(s.ok && solve(sk).ok && near(lastX(), 1600) && sk.entities.size === 44, '11 occurrences, 1600 au bout');
+  ok(near(sk.points.get(pat.refs[1 * pat.m + (pat.r || 0)]).x, 160), 'pas de 160');
+  ok(analyze(sk).over.size === 0 && [...analyze(sk).entities.values()].every((v) => v !== 'over'), 'sans sur-contrainte après ajout');
+  // la cote du total change : tout suit
+  sk.constraints.get(pat.dim).value = 2000;
+  ok(solve(sk).ok && near(lastX(), 2000), 'total 2000');
+}
+
+// espacement fixe : changer le nombre garde le pas
+{
+  const sk = new Sketch();
+  const { L } = rect(sk);
+  const ci = sk.addCircle(sk.addPoint(5, 2.5).id, 1);
+  const ids = [...L.map((l) => l.id), ci.id];
+  const r = patternEntities(sk, ids, { kind: 'lin', dir: { x: 0, y: 1 }, step: 12, count: 3, link: true, dim: false });
+  ok(r.ok && solve(sk).ok, 'répétition verticale');
+  const pat = [...sk.constraints.values()].find((k) => k.type === 'pattern');
+  ok(setPatternCount(sk, pat.id, 6).ok && solve(sk).ok, '6 occurrences');
+  const circles = [...sk.entities.values()].filter((e) => e.type === 'circle');
+  ok(circles.length === 6 && near(Math.max(...circles.map((c) => sk.points.get(c.c).y)), 2.5 + 5 * 12), 'cercles jusqu\'à y = 62,5');
+  sk.addConstraint('dimRadius', [ci.id], { value: 2 });
+  ok(solve(sk).ok && circles.every((c) => near(c.r, 2, 1e-5)), 'les nouveaux cercles suivent le rayon');
+  ok(setPatternCount(sk, pat.id, 2).ok && solve(sk).ok && sk.entities.size === 10, 'retour à 2 occurrences (' + sk.entities.size + ')');
+  ok(analyze(sk).over.size === 0, 'pas de sur-contrainte');
+}
+
+// circulaire, tour complet : 360° / n ; le nombre change, l'angle suit
+{
+  const sk = new Sketch();
+  const p1 = sk.addPoint(20, 0), p2 = sk.addPoint(30, 0);
+  const l1 = sk.addLine(p1.id, p2.id);
+  sk.addConstraint('fixed', [l1.id]);
+  const r = patternEntities(sk, [l1.id], { kind: 'circ', center: ORIGIN_ID, step: 2 * Math.PI / 9, count: 9, link: true, dim: true, even: true, full: true });
+  ok(r.ok && solve(sk).ok, 'tour complet, 9 occurrences');
+  const pat = [...sk.constraints.values()].find((k) => k.type === 'pattern');
+  const dim = sk.constraints.get(pat.dim);
+  ok(pat.full && !pat.dimTotal && near(dim.value, 2 * Math.PI / 9), 'cote de 40°');
+  ok(setPatternCount(sk, pat.id, 6).ok && solve(sk).ok, '6 occurrences');
+  ok(near(sk.constraints.get(pat.dim).value, Math.PI / 3), 'cote à 60°');
+  const q = sk.points.get(pat.refs[3 * pat.m]);
+  ok(near(q.x, -20, 1e-6) && near(q.y, 0, 1e-6), 'occurrence 3 à 180°');
+  ok(analyze(sk).over.size === 0, 'pas de sur-contrainte');
+  ok(setPatternCount(sk, pat.id, 12).ok && solve(sk).ok && near(sk.constraints.get(pat.dim).value, Math.PI / 6), '12 occurrences, 30°');
+  ok(analyze(sk).over.size === 0, 'pas de sur-contrainte (12)');
+}
+
+// circulaire, angle total 90° sur 4 occurrences : cote du total, pas de 30°
+{
+  const sk = new Sketch();
+  const p1 = sk.addPoint(20, 0), p2 = sk.addPoint(30, 0);
+  const l1 = sk.addLine(p1.id, p2.id);
+  sk.addConstraint('fixed', [l1.id]);
+  const r = patternEntities(sk, [l1.id], { kind: 'circ', center: ORIGIN_ID, step: Math.PI / 6, count: 4, link: true, dim: true, even: true });
+  ok(r.ok && solve(sk).ok, 'angle total 90°');
+  const pat = [...sk.constraints.values()].find((k) => k.type === 'pattern');
+  ok(pat.dimTotal && near(sk.constraints.get(pat.dim).value, Math.PI / 2), 'cote 90°');
+  ok(setPatternCount(sk, pat.id, 7).ok && solve(sk).ok, '7 occurrences');
+  const last = sk.points.get(pat.refs[6 * pat.m + (pat.r || 0)]);
+  ok(near(Math.atan2(last.y, last.x), Math.PI / 2, 1e-6), 'dernière toujours à 90°');
+  ok(near(Math.atan2(sk.points.get(pat.refs[1 * pat.m + (pat.r || 0)]).y, sk.points.get(pat.refs[1 * pat.m + (pat.r || 0)]).x), Math.PI / 12, 1e-6), 'pas de 15°');
+  ok(analyze(sk).over.size === 0, 'pas de sur-contrainte');
+  ok(setPatternCount(sk, pat.id, 3).ok && solve(sk).ok, '3 occurrences');
+  const last3 = sk.points.get(pat.refs[2 * pat.m + (pat.r || 0)]);
+  ok(near(Math.atan2(last3.y, last3.x), Math.PI / 2, 1e-6) && analyze(sk).over.size === 0, 'dernière à 90°, sans sur-contrainte');
 }
 
 print(fails ? `${fails} ÉCHEC(S)` : 'TOUS LES TESTS PASSENT');

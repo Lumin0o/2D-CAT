@@ -83,18 +83,21 @@ function scene() {
     '0', 'VERTEX', '8', '0', '10', '110', '20', '10',
     '0', 'SEQEND',
     '0', 'CIRCLE', '8', '0', '10', '5', '20', '0', '40', '2', '210', '0', '220', '0', '230', '-1',
-    '0', 'TEXT', '8', '0', '1', 'Bonjour',
+    '0', 'TEXT', '8', '0', '10', '3', '20', '4', '40', '2.5', '62', '1', '1', 'Bonjour \\U+00E9t%%d',
+    '0', 'MTEXT', '8', '0', '1', 'Paragraphe',
     '0', 'ENDSEC', '0', 'EOF'].join('\n');
   const r = parseDXF(lw);
   const types = r.items.map((i) => i.type).join(',');
-  ok(types === 'line,arc,line,line,line,circle', 'polylignes + cercle : ' + types);
+  ok(types === 'line,arc,line,line,line,circle,text', 'polylignes + cercle + texte : ' + types);
+  const tx = r.items[6];
+  ok(tx.text === 'Bonjour ét°' && near(tx.size, 2.5) && near(tx.x, 3) && tx.color === '#ff3b30', 'TEXT lu (accents, %%d, couleur ACI 1) : ' + JSON.stringify(tx));
   const arc = r.items[1];
   // de (10,0) à (10,10), bulge 1 → demi-cercle de centre (10,5), sens trigonométrique (par la droite)
   ok(nearP(arc.c, { x: 10, y: 5 }) && arc.ccw && near(arcInfo(arc.c, arc.s, arc.e, arc.ccw).sweep, Math.PI), 'bulge → demi-cercle centré (10,5)');
   const ang = Math.atan2(0, 1);
   ok(near(arcInfo(arc.c, arc.s, arc.e, true).a1 + Math.PI / 2, ang + 0), 'l\'arc part vers le bas du centre');
   ok(nearP(r.items[5].c, { x: -5, y: 0 }), 'OCS (0,0,-1) : X inversé');
-  ok(r.skipped.TEXT === 1, 'texte ignoré et compté');
+  ok(r.skipped.MTEXT === 1 && !r.skipped.TEXT, 'MTEXT ignoré et compté, TEXT importé');
 }
 
 // fichier qui n'est pas un DXF
@@ -124,6 +127,27 @@ function scene() {
   ok((s.match(/ c\n/g) || []).length + (s.match(/ c$/gm) || []).length >= 4, 'cercle en 4 courbes de Bézier');
   ok(/\(R12,5 \\\(45\\260\\\)\) Tj/.test(s), 'texte avec parenthèses échappées et « ° » en WinAnsi');
   ok(near(textWidth('0', 10), 5.56), 'largeur Helvetica');
+}
+
+// textes : export TEXT (accents en \\U+), relu à l'identique
+{
+  const sk = new Sketch();
+  sk.addLine(ORIGIN_ID, sk.addPoint(50, 0).id);
+  sk.addText(5, 10, 'Côte été 45°', { size: 3.5, color: '#0a84ff' });
+  sk.addText(20, 20, 'Auto', { size: 5 });
+  const { text, count } = exportDXF(sk);
+  ok(count === 3 && /\n  0\r?\nTEXT\r?\n/.test(text), 'deux TEXT exportés (' + count + ')');
+  ok(text.includes('C\\U+00F4te \\U+00E9t\\U+00E9 45\\U+00B0') && !/[^\x00-\x7f]/.test(text), 'accents en \\U+XXXX, fichier ASCII');
+  const r = parseDXF(text);
+  const texts = r.items.filter((i) => i.type === 'text');
+  ok(texts.length === 2 && texts[0].text === 'Côte été 45°' && near(texts[0].size, 3.5) && near(texts[1].y, 20), 'relus : ' + JSON.stringify(texts));
+  ok(texts[0].color === '#0a84ff' && texts[1].color === null, 'couleur bleue (ACI 140), automatique sans couleur');
+  const sk2 = new Sketch();
+  addImported(sk2, r.items);
+  ok(sk2.texts.size === 2 && sk2.entities.size === 1, 'import : 2 textes et une ligne');
+  const j = Sketch.deserialize(sk.serialize());
+  ok(j.texts.size === 2 && [...j.texts.values()][0].text === 'Côte été 45°', 'textes enregistrés et relus');
+  ok(new Sketch().serialize().indexOf('texts') < 0, 'esquisse sans texte : format inchangé');
 }
 
 print(fails ? `${fails} ÉCHEC(S)` : 'TOUS LES TESTS PASSENT');

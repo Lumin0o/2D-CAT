@@ -553,14 +553,15 @@ export class ChamferTool extends CornerTool {
 /**
  * Base des répétitions : 1) les éléments à répéter (Valider), 2) la direction (ligne ou cote linéaire) ou le centre
  * (point, cercle, arc). La petite fenêtre sous la barre règle le sens, l'espacement, le nombre d'occurrences
- * (original compris), l'espacement constant (occurrences liées) et la cote ; l'aperçu jaune suit ; Valider crée.
+ * (original compris), l'espacement constant (longueur ou angle total réparti entre les occurrences), les pièces
+ * identiques (occurrences liées) et la cote ; l'aperçu jaune suit ; Valider crée.
  */
 class PatternTool extends SelectThenActTool {
-  static last = { lin: { step: null, count: 3 }, circ: { step: null, count: 4 } };
+  static last = { lin: { step: null, count: 3, total: null }, circ: { step: null, count: 4, total: null } };
   reset() { this.ref = null; this.rev = false; this.refHover = null; super.reset(); }
   get firstPhase() { return 'axis'; }
   get mem() { return PatternTool.last[this.kind]; }
-  get opts() { return { link: true, dim: true, ...(this.tc.settings.patternOpts || {}) }; }
+  get opts() { return { link: true, dim: true, even: false, ...(this.tc.settings.patternOpts || {}) }; }
   setOpt(key, v) { this.tc.setSetting('patternOpts', { ...this.opts, [key]: v }); }
   onPicked() { this.ref = null; this.tc.updateToolOptions(); }
   actions() {
@@ -580,27 +581,41 @@ class PatternTool extends SelectThenActTool {
     });
   }
   afterChange() { this.tc.updateToolOptions(); this.updateHint(); this.tc.refreshUI(); }
+  /** Espacement réellement appliqué (espacement constant : total réparti entre les occurrences). */
+  get stepEff() { return this.opts.even ? this.evenStep() : this.step; }
   options() {
     if (this.phase !== 'axis' || !this.ref) return [];
     const o = this.opts;
+    const lin = this.kind === 'lin';
     const set = (key) => (v) => { this.setOpt(key, v); };
-    return [
-      { label: 'Inverser le sens', sub: this.kind === 'lin' ? 'Côté où la répétition se propage' : 'Sens de rotation', value: this.rev, set: (v) => { this.rev = v; } },
-      { label: this.kind === 'lin' ? 'Espacement' : 'Angle', sub: 'Entre deux occurrences', text: this.stepText(), onTap: () => this.editStep() },
-      { label: 'Nombre d\'occurrences', sub: 'Original compris', text: String(this.mem.count), onTap: () => this.editCount() },
-      { label: 'Espacement constant', sub: 'Occurrences liées, à égale distance', value: o.link, set: set('link') },
-      { label: 'Ajouter une cote', sub: o.link ? 'Cote de l\'espacement' : 'Avec l\'espacement constant', value: o.link && o.dim, set: set('dim'), disabled: !o.link },
+    const rows = [
+      { label: 'Inverser le sens', sub: lin ? 'Côté où la répétition se propage' : 'Sens de rotation', value: this.rev, set: (v) => { this.rev = v; } },
+      { label: lin ? 'Espacement' : 'Angle', sub: o.even ? 'Calculé : le total réparti' : 'Entre deux occurrences', text: this.stepText(), onTap: () => this.editStep(), disabled: o.even },
     ];
+    if (o.even) rows.push({ label: lin ? 'Longueur totale' : 'Angle total', sub: lin ? 'De l\'original à la dernière occurrence' : this.totalSub(), text: this.totalText(), onTap: () => this.editTotal() });
+    rows.push(
+      { label: 'Nombre d\'occurrences', sub: 'Original compris', text: String(this.mem.count), onTap: () => this.editCount() },
+      { label: 'Espacement constant', sub: lin ? 'Une longueur totale répartie' : 'Un angle total réparti', value: o.even, set: set('even') },
+      { label: 'Garder les pièces identiques', sub: 'Occurrences liées à l\'original', value: o.link, set: set('link') },
+      { label: 'Ajouter une cote', sub: !o.link ? 'Avec « Garder les pièces identiques »' : this.dimSub(), value: o.link && o.dim, set: set('dim'), disabled: !o.link },
+    );
+    return rows;
+  }
+  dimSub() {
+    if (!this.opts.even) return 'Cote de l\'espacement';
+    if (this.kind === 'lin') return 'Cote de la longueur totale';
+    return this.totalIsDimmable() ? 'Cote de l\'angle total' : 'Cote de l\'angle entre occurrences';
   }
   apply() {
     if (!this.ref) return;
     const items = this.items.filter((id) => !this.refIds().includes(id) || this.kind === 'circ');
     const o = this.opts;
-    const params = { ...this.params(), count: this.mem.count, link: o.link, dim: o.link && o.dim, gap: this.tc.pxToWorld(28) };
+    const params = { ...this.params(), count: this.mem.count, link: o.link, dim: o.link && o.dim, even: o.even, full: o.even && this.isFull(), gap: this.tc.pxToWorld(28) };
     const r = this.tc.applyEdit(this.kind === 'lin' ? 'Répétition linéaire' : 'Répétition circulaire', (sk) => patternEntities(sk, items, params));
     if (r.ok) { this.reset(); this.tc.updateToolOptions(); }
     this.updateHint();
   }
+  isFull() { return false; }
   preview(d) {
     if (!this.ref) return;
     const sk = this.tc.sketch;
@@ -655,6 +670,7 @@ export class LinearPatternTool extends PatternTool {
     if (this.ref && this.ref.id === id) { this.ref = null; this.tc.updateToolOptions(); return; }
     this.ref = r;
     if (!(this.mem.step > 0)) this.mem.step = this.defaultStep();
+    if (!(this.mem.total > 0)) this.mem.total = this.mem.step * (this.mem.count - 1);
     this.tc.updateToolOptions();
   }
   /** Espacement proposé : la taille de la sélection dans la direction, plus un peu, arrondie. */
@@ -674,11 +690,15 @@ export class LinearPatternTool extends PatternTool {
     const size = isFinite(hi - lo) && hi - lo > 1e-9 ? hi - lo : this.tc.pxToWorld(60);
     return niceRound(size * 1.25);
   }
-  stepText() { return this.fmtL(this.mem.step || 0); }
+  get step() { return this.mem.step || 0; }
+  evenStep() { return (this.mem.total || 0) / (this.mem.count - 1); }
+  stepText() { return this.fmtL(this.stepEff); }
   editStep() { this.tc.lengthKeypad('Espacement', this.mem.step || 10, (mm) => { this.mem.step = mm; this.afterChange(); }); }
+  totalText() { return this.fmtL(this.mem.total || 0); }
+  editTotal() { this.tc.lengthKeypad('Longueur totale (original → dernière)', this.mem.total || 10, (mm) => { this.mem.total = mm; this.afterChange(); }); }
   get dir() { const u = this.ref.u, s = this.rev ? -1 : 1; return { x: u.x * s, y: u.y * s }; }
-  params() { return { kind: 'lin', dir: this.dir, axis: this.ref.axis, step: this.mem.step }; }
-  transform(i) { return translation({ x: this.dir.x * this.mem.step * i, y: this.dir.y * this.mem.step * i }); }
+  params() { return { kind: 'lin', dir: this.dir, axis: this.ref.axis, step: this.stepEff }; }
+  transform(i) { const st = this.stepEff; return translation({ x: this.dir.x * st * i, y: this.dir.y * st * i }); }
 }
 
 /** Répétition circulaire : autour d'un point, ou du centre d'un cercle ou d'un arc. */
@@ -714,7 +734,26 @@ export class CircularPatternTool extends PatternTool {
   }
   /** Angle entre occurrences : réparti sur 360° tant qu'on ne l'a pas saisi. */
   get step() { return this.mem.step > 0 ? this.mem.step : 2 * Math.PI / this.mem.count; }
-  stepText() { return fmtAngle(this.step, this.tc.settings) + (this.mem.step > 0 ? '' : ' (360° / ' + this.mem.count + ')'); }
+  /** Angle total : 360° (tour complet) par défaut. */
+  get total() { return this.mem.total > 0 ? this.mem.total : 2 * Math.PI; }
+  isFull() { return Math.abs(this.total - 2 * Math.PI) < 1e-9; }
+  /** Tour complet : 360° / nombre ; sinon le total va de l'original à la dernière occurrence. */
+  evenStep() { return this.isFull() ? 2 * Math.PI / this.mem.count : this.total / (this.mem.count - 1); }
+  totalIsDimmable() { return !this.isFull() && this.total < Math.PI - 1e-3; }
+  totalSub() { return this.isFull() ? 'Tour complet : 360° ÷ nombre' : 'De l\'original à la dernière occurrence'; }
+  totalText() { return fmtAngle(this.total, this.tc.settings); }
+  editTotal() {
+    const deg = this.tc.settings.angleUnit !== 'rad';
+    this.tc.numberKeypad({
+      title: 'Angle total (360° = tour complet)', unit: deg ? '°' : 'rad', initial: fmtNumberLocal(deg ? this.total * 180 / Math.PI : this.total),
+      validate: (v) => { const r = deg ? v * Math.PI / 180 : v; return r > 1e-6 && r <= 2 * Math.PI + 1e-9 ? null : (deg ? 'Entre 0 et 360°' : 'Entre 0 et 2π'); },
+      onSubmit: (v) => { const r = deg ? v * Math.PI / 180 : v; this.mem.total = Math.abs(r - 2 * Math.PI) < 1e-7 ? 2 * Math.PI : r; this.afterChange(); },
+    });
+  }
+  stepText() {
+    if (this.opts.even) return fmtAngle(this.stepEff, this.tc.settings);
+    return fmtAngle(this.step, this.tc.settings) + (this.mem.step > 0 ? '' : ' (360° / ' + this.mem.count + ')');
+  }
   editStep() {
     const deg = this.tc.settings.angleUnit !== 'rad';
     this.tc.numberKeypad({
@@ -723,7 +762,7 @@ export class CircularPatternTool extends PatternTool {
       onSubmit: (v) => { this.mem.step = deg ? v * Math.PI / 180 : v; this.afterChange(); },
     });
   }
-  params() { return { kind: 'circ', center: this.ref.id, step: this.step * (this.rev ? -1 : 1) }; }
-  transform(i) { const c = this.tc.sketch.points.get(this.ref.id); return rotation(c, this.step * (this.rev ? -1 : 1) * i); }
+  params() { return { kind: 'circ', center: this.ref.id, step: this.stepEff * (this.rev ? -1 : 1) }; }
+  transform(i) { const c = this.tc.sketch.points.get(this.ref.id); return rotation(c, this.stepEff * (this.rev ? -1 : 1) * i); }
 }
 const fmtNumberLocal = (v) => String(Math.round(v * 10000) / 10000).replace('.', ',');

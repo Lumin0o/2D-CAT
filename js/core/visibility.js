@@ -11,6 +11,7 @@ export const VIS_TYPES = [
   ['construction', 'Construction'],
   ['points', 'Points'],
   ['dims', 'Cotes'],
+  ['texts', 'Textes'],
   ['relations', 'Relations'],
   ['axes', 'Axes et origine'],
 ];
@@ -28,7 +29,8 @@ export function entityVisKey(e) {
  * - entités : selon leur catégorie ;
  * - points : « Points » (origine : « Axes et origine ») ;
  * - cotes (et cotes 0 des ordinales) : « Cotes » ; relations : « Relations ».
- * @returns {{ents:Set<string>, pts:Set<string>, cons:Set<string>, axes:boolean}|null}
+ * - textes : « Textes ».
+ * @returns {{ents:Set<string>, pts:Set<string>, cons:Set<string>, texts:Set<string>, axes:boolean}|null}
  */
 export function hiddenItems(sk, vis) {
   const v = { ...DEFAULT_VISIBILITY, ...(vis || {}) };
@@ -37,7 +39,9 @@ export function hiddenItems(sk, vis) {
   for (const e of sk.entities.values()) if (!v[entityVisKey(e)]) ents.add(e.id);
   for (const p of sk.points.values()) if (!(p.id === ORIGIN_ID ? v.axes : v.points)) pts.add(p.id);
   for (const k of sk.constraints.values()) if (!(isAnnotation(k) ? v.dims : v.relations)) cons.add(k.id);
-  return { ents, pts, cons, axes: v.axes };
+  const texts = new Set();
+  if (!v.texts && sk.texts) for (const t of sk.texts.values()) texts.add(t.id);
+  return { ents, pts, cons, texts, axes: v.axes };
 }
 
 /** Nombre de types masqués (0 : tout est visible). */

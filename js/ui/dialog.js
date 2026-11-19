@@ -31,7 +31,7 @@ export function showDialog(opts) {
       input.className = 'dialog-input';
       input.value = opts.input.value || '';
       input.placeholder = opts.input.placeholder || '';
-      input.maxLength = 80;
+      input.maxLength = opts.input.maxLength || 80;
       input.autocomplete = 'off';
       input.setAttribute('autocapitalize', 'sentences');
       input.enterKeyHint = 'done';

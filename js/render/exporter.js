@@ -5,12 +5,13 @@ import { Viewport } from './viewport.js';
 import { dimLayout } from './annotations.js';
 import { isAnnotation } from '../core/solver.js';
 import { arcBBox } from '../core/geom.js';
+import { textBox } from '../core/model.js';
 
 /** Couleurs d'impression : tout en noir sur blanc, cotes pilotées en gris. */
 export const PRINT_COLORS = {
   under: '#000000', full: '#000000', over: '#000000', selected: '#000000',
   preview: '#000000', ghost: '#000000', guide: '#888888', snap: '#000000', origin: '#000000',
-  dim: '#1a1a1a', dimDriven: '#707070', badgeBg: '#ffffff', badgeFg: '#000000', loupeRing: '#000000',
+  dim: '#1a1a1a', dimDriven: '#707070', badgeBg: '#ffffff', badgeFg: '#000000', loupeRing: '#000000', text: '#000000',
   canvasBg: '#ffffff', gridPaper: '#cccccc', gridAlpha: 0, axis: '#cccccc', accent: '#000000', green: '#000000',
 };
 
@@ -26,7 +27,8 @@ export function exportHidden(sk, userHidden = null, { dims = true, construction 
   for (const k of sk.constraints.values()) {
     if (!isAnnotation(k) || !dims || (userHidden && userHidden.cons.has(k.id))) cons.add(k.id);
   }
-  return { ents, pts, cons, axes: false };
+  const texts = new Set(userHidden && userHidden.texts ? userHidden.texts : []);
+  return { ents, pts, cons, texts, axes: false };
 }
 
 /** Boîte englobante (monde) de ce qui est exporté : entités visibles et cotes. */
@@ -45,6 +47,10 @@ export function exportBBox(sk, H) {
     else if (e.type === 'arc') { const bb = arcBBox(P(e.c), P(e.s), P(e.e), e.ccw); grow({ x: bb.minX, y: bb.minY }); grow({ x: bb.maxX, y: bb.maxY }); }
   }
   for (const p of sk.points.values()) if (!H.pts.has(p.id)) grow(p);
+  if (sk.texts) for (const t of sk.texts.values()) {
+    if (H.texts && H.texts.has(t.id)) continue;
+    const q = textBox(t); grow({ x: q.minX, y: q.minY }); grow({ x: q.maxX, y: q.maxY });
+  }
   for (const k of sk.constraints.values()) {
     if (!isAnnotation(k) || H.cons.has(k.id)) continue;
     const lay = dimLayout(sk, k);

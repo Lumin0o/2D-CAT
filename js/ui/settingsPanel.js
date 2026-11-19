@@ -3,7 +3,7 @@ import { GROUPS, describeFavorite } from './tools/registry.js';
 import { icon } from './icons.js';
 import { popoverItem, popoverTitle } from './popover.js';
 import { fmtNumber, fmtLength, fmtAngle, UNITS } from '../core/units.js';
-import { DEFAULT_SETTINGS } from '../store/settings.js';
+import { DEFAULT_SETTINGS, COLOR_KEYS } from '../store/settings.js';
 
 const UNIT_NAMES = { mm: 'Millimètre (mm)', cm: 'Centimètre (cm)', m: 'Mètre (m)', inch: 'Pouce (")', ft: 'Pied (\')', yd: 'Yard (vg)' };
 import { APP_VERSION } from '../version.js';
@@ -130,22 +130,25 @@ export class SettingsPanel {
     card.appendChild(ex);
     body.appendChild(card);
 
-    // --- Couleurs d'état ---
-    body.appendChild(title('Couleurs d\'état'));
+    // --- Couleurs ---
+    body.appendChild(title('Couleurs'));
     card = document.createElement('div'); card.className = 'card';
     const themeKey = s.resolvedTheme();      // couleurs du thème affiché
-    const cols = s.get('colors')[themeKey] || DEFAULT_SETTINGS.colors[themeKey];
-    for (const [key, label] of [['under', 'Sous-contrainte'], ['full', 'Entièrement contrainte'], ['over', 'Sur-contrainte']]) {
+    const cols = { ...DEFAULT_SETTINGS.colors[themeKey], ...(s.get('colors')[themeKey] || {}) };
+    const tn = document.createElement('div'); tn.className = 'row-note';
+    tn.textContent = `Couleurs du thème ${themeKey === 'dark' ? 'sombre' : 'clair'} (celui qui est affiché).`;
+    card.appendChild(tn);
+    for (const [key, label, sub] of COLOR_KEYS) {
       const r = document.createElement('label');
       r.className = 'row color-row';
-      r.innerHTML = `<span class="row-label">${label}</span><span class="color-swatch" style="background:${cols[key]}"></span>`;
+      r.innerHTML = `<span class="row-label">${label}${sub ? `<br><small class="row-sub">${sub}</small>` : ''}</span><span class="color-swatch" style="background:${cols[key]}"></span>`;
       const inp = document.createElement('input');
       inp.type = 'color';
       inp.value = cols[key];
       inp.className = 'color-input';
       inp.addEventListener('input', () => {
         const all = JSON.parse(JSON.stringify(s.get('colors')));
-        all[themeKey] = { ...all[themeKey], [key]: inp.value };
+        all[themeKey] = { ...DEFAULT_SETTINGS.colors[themeKey], ...all[themeKey], [key]: inp.value };
         s.set('colors', all);
         r.querySelector('.color-swatch').style.background = inp.value;
       });

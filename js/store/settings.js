@@ -9,6 +9,26 @@ export const DEFAULT_FAVORITES = [
 ];
 export const MAX_CELLS = 8;         // cases par ligne : 5 à 8
 
+/** Couleurs réglables (Réglages › Couleurs), dans l'ordre de la liste : clé, libellé, précision. */
+export const COLOR_KEYS = [
+  ['under', 'Sous-contrainte', 'Encore libre'],
+  ['full', 'Entièrement contrainte', ''],
+  ['over', 'Sur-contrainte', 'Et erreurs'],
+  ['selected', 'Sélection', 'Éléments sélectionnés ou désignés'],
+  ['preview', 'Tracé en cours', 'Aperçu de ce qu\'on dessine, cote en cours'],
+  ['ghost', 'Aperçu des modifications', 'Décaler, symétrie, copier, répétition…'],
+  ['snap', 'Accrochage', 'Symbole d\'aimantation'],
+  ['origin', 'Origine', 'Flèches des axes'],
+  ['axis', 'Axes', 'Pointillés passant par l\'origine'],
+  ['grid', 'Grille', ''],
+  ['dim', 'Cotes', ''],
+  ['dimDriven', 'Cotes pilotées', ''],
+  ['badge', 'Relations', 'Icônes des relations'],
+  ['pattern', 'Répétitions', 'Case du nombre d\'occurrences'],
+  ['measure', 'Mètre', 'Mesure et cadre de capture'],
+  ['text', 'Textes', 'Couleur « automatique » de l\'outil Texte'],
+];
+
 export const DEFAULT_SETTINGS = {
   theme: 'auto',              // 'light' | 'dark' | 'auto'
   unit: 'mm',                 // mm cm m inch ft yd
@@ -19,9 +39,17 @@ export const DEFAULT_SETTINGS = {
   toolbarCells: 6,            // cases par ligne (5 à 8)
   drawInput: 'tap',           // tracé : 'tap' (touchers successifs) | 'drag' (glisser-lâcher) | 'both'
   favorites: [...DEFAULT_FAVORITES],   // id de groupe, ou 'tool:<id>'
-  colors: {
-    light: { under: '#1f6fe5', full: '#111111', over: '#e0241c' },
-    dark:  { under: '#6db3ff', full: '#f2f2f0', over: '#ff453a' },
+  colors: {                   // couleurs du dessin, par thème (voir COLOR_KEYS)
+    light: {
+      under: '#1f6fe5', full: '#111111', over: '#e0241c', selected: '#ff8a00', preview: '#1f6fe5', ghost: '#ffff00',
+      snap: '#c98a00', origin: '#d8392b', dim: '#3c3c43', dimDriven: '#8e8e93', badge: '#1c7a35', pattern: '#8a3ccf',
+      measure: '#30b14e', text: '#111111', grid: '#a2a6b2', axis: '#95959f',
+    },
+    dark: {
+      under: '#6db3ff', full: '#f2f2f0', over: '#ff453a', selected: '#ffb340', preview: '#9ad0ff', ghost: '#ffff00',
+      snap: '#ffd60a', origin: '#ff6b5e', dim: '#c9c9ce', dimDriven: '#8e8e93', badge: '#7ee29a', pattern: '#c79bff',
+      measure: '#32d158', text: '#f2f2f0', grid: '#4a4d55', axis: '#6b6b72',
+    },
   },
   snap: true,                 // interrupteur général « Aimant » : sans lui, aucun des types ci-dessous n'agit
   snapTypes: {                // types d'aimantation et relations automatiques correspondantes
@@ -39,7 +67,9 @@ export const DEFAULT_SETTINGS = {
   lastTools: {},              // groupId -> toolId (dernier outil utilisé du groupe)
   recentGroup: null,          // dernier groupe utilisé hors des cases fixes : affiché dans la dernière case
   offsetOpts: { chain: true, dim: true, construction: false },    // options de l'outil Décaler
-  patternOpts: { link: true, dim: true },                          // options des répétitions
+  patternOpts: { link: true, dim: true, even: false },             // options des répétitions
+  textOpts: { size: null, color: null },                           // outil Texte : dernière taille (mm) et couleur
+  optsCollapsed: false,                                            // petite fenêtre d'options réduite
   visibility: { ...DEFAULT_VISIBILITY },  // affichage (bouton œil) : types d'éléments visibles sur le dessin
   rev: 1,                     // révision des réglages enregistrés (migrations)
 };
