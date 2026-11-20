@@ -7,6 +7,8 @@ import { DEFAULT_SETTINGS, COLOR_KEYS } from '../store/settings.js';
 
 const UNIT_NAMES = { mm: 'Millimètre (mm)', cm: 'Centimètre (cm)', m: 'Mètre (m)', inch: 'Pouce (")', ft: 'Pied (\')', yd: 'Yard (vg)' };
 import { APP_VERSION } from '../version.js';
+import { showDialog } from './dialog.js';
+import { buildHelp } from './help.js';
 
 /** L'app est-elle entièrement en cache pour fonctionner sans réseau ? */
 async function offlineStatus() {
@@ -26,16 +28,36 @@ export class SettingsPanel {
     this.el = el;
     this.open_ = false;
   }
-  open() { this.open_ = true; this.render(); this.el.hidden = false; }
+  open() { this.open_ = true; this.view = 'settings'; this.scroll = 0; this.render(); this.el.hidden = false; }
   close() { this.open_ = false; this.el.hidden = true; this.app.popovers.close(); }
+
+  /** Demande confirmation, puis lance run. */
+  confirm(title, message, label, run) {
+    showDialog({
+      title, message,
+      buttons: [{ label: 'Annuler', value: 'cancel', style: 'cancel' }, { label, value: 'ok', style: 'danger' }],
+    }).then(({ button }) => { if (button === 'ok') run(); });
+  }
 
   render() {
     const s = this.app.settings;
     const el = this.el;
+    // un réglage reconstruit le panneau : on garde l'endroit où l'on était
+    const old = el.querySelector('.panel-body');
+    if (old && this.view === this.renderedView) this.scroll = old.scrollTop;
     el.innerHTML = '';
     const header = document.createElement('div');
     header.className = 'panel-header';
-    header.innerHTML = '<h2>Réglages</h2>';
+    if (this.view === 'help') {
+      const back = document.createElement('button');
+      back.className = 'panel-back';
+      back.innerHTML = `<span class="chev back">${icon('chevronRight')}</span>Réglages`;
+      back.addEventListener('click', (e) => { e.preventDefault(); this.view = 'settings'; this.scroll = this.settingsScroll || 0; this.render(); });
+      header.appendChild(back);
+    }
+    const h2 = document.createElement('h2');
+    h2.textContent = this.view === 'help' ? 'Aide' : 'Réglages';
+    header.appendChild(h2);
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Fermer';
     closeBtn.addEventListener('click', (e) => { e.preventDefault(); this.close(); });
@@ -44,16 +66,43 @@ export class SettingsPanel {
     const body = document.createElement('div');
     body.className = 'panel-body';
     el.appendChild(body);
+    this.renderedView = this.view;
+    if (this.view === 'help') buildHelp(body);
+    else this.renderSettings(body);
+    body.scrollTop = this.scroll || 0;
+  }
 
-    // --- Apparence ---
-    body.appendChild(title('Apparence'));
-    let card = document.createElement('div'); card.className = 'card';
-    card.appendChild(row('Thème', segmented([['light', 'Clair'], ['dark', 'Sombre'], ['auto', 'Automatique']], s.get('theme'), (v) => s.set('theme', v))));
+  /** Catégorie réductible : titre (touchez pour réduire / rouvrir) et sa carte. */
+  section(body, key, label) {
+    const s = this.app.settings;
+    const collapsed = new Set(s.get('settingsCollapsed') || []);
+    const t = document.createElement('button');
+    t.className = 'section-title section-toggle' + (collapsed.has(key) ? ' collapsed' : '');
+    t.innerHTML = `<span>${label}</span><span class="chev">${icon('chevronRight')}</span>`;
+    t.setAttribute('aria-expanded', String(!collapsed.has(key)));
+    t.addEventListener('click', (e) => {
+      e.preventDefault();
+      const c = new Set(s.get('settingsCollapsed') || []);
+      if (c.has(key)) c.delete(key); else c.add(key);
+      s.set('settingsCollapsed', [...c]);
+      this.render();
+    });
+    body.appendChild(t);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.hidden = collapsed.has(key);
     body.appendChild(card);
+    return card;
+  }
+
+  renderSettings(body) {
+    const s = this.app.settings;
+    // --- Apparence ---
+    let card = this.section(body, 'appearance', 'Apparence');
+    card.appendChild(row('Thème', segmented([['light', 'Clair'], ['dark', 'Sombre'], ['auto', 'Automatique']], s.get('theme'), (v) => s.set('theme', v))));
 
     // --- Barre d'outils ---
-    body.appendChild(title('Barre d\'outils'));
-    card = document.createElement('div'); card.className = 'card';
+    card = this.section(body, 'toolbar', 'Barre d\'outils');
     card.appendChild(row('Cases par ligne', segmented([[5, '5'], [6, '6'], [7, '7'], [8, '8']], this.app.toolbar.cellsPerRow(), (v) => { s.set('toolbarCells', v); this.render(); })));
     card.appendChild(row('Lignes', segmented([[1, '1 ligne'], [2, '2 lignes']], s.get('toolbarRows'), (v) => { s.set('toolbarRows', v); this.render(); })));
     const lp = document.createElement('button');
@@ -68,11 +117,9 @@ export class SettingsPanel {
       });
     });
     card.appendChild(lp);
-    body.appendChild(card);
 
     // --- Tracé ---
-    body.appendChild(title('Tracé'));
-    card = document.createElement('div'); card.className = 'card';
+    card = this.section(body, 'drawing', 'Tracé');
     card.appendChild(row('Poser les points', segmented([['tap', 'Touchers'], ['drag', 'Glisser'], ['both', 'Les deux']], s.get('drawInput'), (v) => { s.set('drawInput', v); this.render(); })));
     const how = {
       tap: 'Un toucher par point : 2 touchers (3 pour certains outils). Glisser avant de lâcher ajuste le point.',
@@ -81,11 +128,9 @@ export class SettingsPanel {
     }[s.get('drawInput')] || '';
     const note = document.createElement('div'); note.className = 'row-note'; note.textContent = how;
     card.appendChild(note);
-    body.appendChild(card);
 
     // --- Favoris ---
-    body.appendChild(title('Favoris de la barre réduite'));
-    card = document.createElement('div'); card.className = 'card';
+    card = this.section(body, 'favorites', 'Favoris de la barre réduite');
     const n = (s.get('toolbarRows') === 2 ? 2 : 1) * this.app.toolbar.cellsPerRow();
     const favs = s.get('favorites');
     for (let i = 0; i < n; i++) {
@@ -109,11 +154,9 @@ export class SettingsPanel {
       r.addEventListener('click', (e) => { e.preventDefault(); this.chooseFavorite(r, i); });
       card.appendChild(r);
     }
-    body.appendChild(card);
 
     // --- Unités ---
-    body.appendChild(title('Unités'));
-    card = document.createElement('div'); card.className = 'card';
+    card = this.section(body, 'units', 'Unités');
     const unitBtn = document.createElement('button');
     unitBtn.className = 'row';
     const U = UNITS[s.get('unit')] || UNITS.mm;
@@ -128,11 +171,9 @@ export class SettingsPanel {
     const sample = 133.35;     // 5 1/4 pouces
     ex.textContent = `Exemple : ${fmtLength(sample, s.data)} · ${fmtAngle(Math.PI / 6, s.data)}` + (U.imperial ? ' · les fractions s\'arrondissent au 1/' + s.get('fractionDenominator') : ' · la géométrie ne change pas, seul l\'affichage change');
     card.appendChild(ex);
-    body.appendChild(card);
 
     // --- Couleurs ---
-    body.appendChild(title('Couleurs'));
-    card = document.createElement('div'); card.className = 'card';
+    card = this.section(body, 'colors', 'Couleurs');
     const themeKey = s.resolvedTheme();      // couleurs du thème affiché
     const cols = { ...DEFAULT_SETTINGS.colors[themeKey], ...(s.get('colors')[themeKey] || {}) };
     const tn = document.createElement('div'); tn.className = 'row-note';
@@ -160,13 +201,14 @@ export class SettingsPanel {
     resetC.textContent = 'Couleurs par défaut';
     resetC.addEventListener('click', (e) => {
       e.preventDefault();
-      const all = JSON.parse(JSON.stringify(s.get('colors')));
-      all[themeKey] = { ...DEFAULT_SETTINGS.colors[themeKey] };
-      s.set('colors', all);
-      this.render();
+      this.confirm('Couleurs par défaut', `Les couleurs du thème ${themeKey === 'dark' ? 'sombre' : 'clair'} reprennent leurs valeurs d'origine.`, 'Rétablir', () => {
+        const all = JSON.parse(JSON.stringify(s.get('colors')));
+        all[themeKey] = { ...DEFAULT_SETTINGS.colors[themeKey] };
+        s.set('colors', all);
+        this.render();
+      });
     });
     card.appendChild(resetC);
-    body.appendChild(card);
 
     // --- Réinitialiser ---
     body.appendChild(title(' '));
@@ -174,16 +216,27 @@ export class SettingsPanel {
     const reset = document.createElement('button');
     reset.className = 'row button danger';
     reset.textContent = 'Réinitialiser les réglages';
-    reset.addEventListener('click', (e) => { e.preventDefault(); s.reset(); this.render(); });
+    reset.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.confirm('Réinitialiser les réglages', 'Tous les réglages reprennent leurs valeurs d\'origine. Les esquisses ne sont pas touchées.', 'Réinitialiser', () => { s.reset(); this.render(); });
+    });
     card.appendChild(reset);
     body.appendChild(card);
 
-    body.appendChild(title('À propos'));
-    card = document.createElement('div'); card.className = 'card';
+    card = this.section(body, 'about', 'À propos');
     card.appendChild(row('Esquisse 2D', textValue(`Version ${APP_VERSION} · étape 4`)));
     const off = textValue('Vérification…');
     card.appendChild(row('Hors ligne', off));
     offlineStatus().then((t) => { off.textContent = t; });
+
+    // --- Aide ---
+    body.appendChild(title(' '));
+    card = document.createElement('div'); card.className = 'card';
+    const help = document.createElement('button');
+    help.className = 'row button';
+    help.textContent = 'Aide : outils, relations, cotes, gestes';
+    help.addEventListener('click', (e) => { e.preventDefault(); this.settingsScroll = body.scrollTop; this.view = 'help'; this.scroll = 0; this.render(); });
+    card.appendChild(help);
     body.appendChild(card);
   }
 

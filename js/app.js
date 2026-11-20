@@ -1020,7 +1020,14 @@ export class App {
       } else if (from) t = this.patternReach(pid, { x: from[0], y: from[1] }, { x: q.x, y: q.y });
       if (t) Object.assign(q, t);
     }
-    const res = solveHeld(sk, { weights, maxIter: 40, keep });
+    let res = solveHeld(sk, { weights, maxIter: 40, keep });
+    if (!res.ok && d.mode !== 'radius') {
+      // le doigt est hors de ce que les contraintes permettent (ex. bout d'une ligne dont l'angle est coté) :
+      // les éléments tenus suivent au plus près, sur leur trajectoire possible, au lieu de rester bloqués
+      const soft = new Map(weights);
+      for (const id of soft.keys()) soft.set(id, 0.01);
+      res = solve(sk, { weights: soft, maxIter: 40, keep });
+    }
     if (!res.ok) { this.restorePositions(d.good); return; }
     d.good = this.capturePositions();
     if (d.pendingLast) d.last = d.pendingLast;
@@ -1122,6 +1129,7 @@ export class App {
       else if (sk.entities.has(id)) sk.removeEntity(id);
       else if (sk.points.has(id) && id !== ORIGIN_ID) sk.removePoint(id);
     }
+    sk.pruneLoosePoints();     // ex. centre d'un rectangle par le centre, dont les diagonales sont supprimées
     this.selection.clear();
     this.commit('Suppression');
   }

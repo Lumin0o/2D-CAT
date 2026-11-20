@@ -22,7 +22,10 @@ function addCenterDiagonals(tc, lines, centerSnap) {
   const sk = tc.sketch;
   const d1 = sk.addLine(lines[0].p1, lines[2].p1, { construction: true });
   sk.addLine(lines[1].p1, lines[3].p1, { construction: true });
+  const isNew = !(centerSnap.pointId && sk.points.has(centerSnap.pointId));
   const c = tc.resolvePoint(centerSnap);
+  // nouveau point central : un point d'esquisse (comme l'outil Point), sélectionnable et supprimable
+  if (isNew) c.sketchPoint = true;
   sk.addConstraint('midpoint', [c.id, d1.id]);
 }
 

@@ -139,6 +139,8 @@ export function exportPDFFile(app) {
 export function importDXFFile(app) {
   const input = document.createElement('input');
   input.type = 'file';
+  // types « document » seulement : l'iPhone ouvre directement Fichiers (sans Photothèque ni appareil photo)
+  input.accept = '.dxf,application/dxf,application/octet-stream,text/plain';
   input.style.display = 'none';
   document.body.appendChild(input);
   input.addEventListener('change', async () => {

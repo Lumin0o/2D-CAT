@@ -131,6 +131,14 @@ export class Sketch {
       this.removeConstraintsReferencing(pid);
     }
   }
+  /** Supprime les points devenus isolés et invisibles (ni entité, ni relation, ni point d'esquisse). */
+  pruneLoosePoints() {
+    const used = new Set();
+    for (const e of this.entities.values()) for (const pid of this.entityPointIds(e)) used.add(pid);
+    for (const k of this.constraints.values()) for (const r of k.refs) used.add(r);
+    for (const k of this.constraints.values()) if (k.center) used.add(k.center);
+    for (const [pid, p] of this.points) if (pid !== ORIGIN_ID && !p.sketchPoint && !used.has(pid)) this.points.delete(pid);
+  }
   removePoint(pid) {
     if (pid === ORIGIN_ID) return;
     for (const e of this.entitiesOfPoint(pid)) this.removeEntity(e.id);

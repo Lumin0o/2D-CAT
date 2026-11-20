@@ -233,7 +233,7 @@ svg { display: block; }
 
 /* ===== Fenêtres contextuelles ===== */
 .popover-layer {
-  position: absolute; inset: 0; z-index: 40;
+  position: absolute; inset: 0; z-index: 66;     /* au-dessus des panneaux (Réglages), sous le clavier */
   display: none;
 }
 .popover-layer.open { display: block; }
@@ -384,6 +384,23 @@ svg { display: block; }
 }
 .section-title { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; margin: 16px 12px 6px; }
 .card { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+/* catégorie réductible : touchez le titre */
+.section-toggle { display: flex; align-items: center; justify-content: space-between; width: calc(100% - 24px); min-height: 32px; text-align: left; }
+.section-toggle .chev { display: inline-flex; color: var(--text2); transition: transform .15s; transform: rotate(90deg); }
+.section-toggle .chev svg { width: 14px; height: 14px; }
+.section-toggle.collapsed .chev { transform: rotate(0deg); }
+.panel-header .panel-back { display: inline-flex; align-items: center; gap: 2px; padding-left: 0; }
+.panel-back .chev.back { display: inline-flex; transform: rotate(180deg); }
+.panel-back .chev svg { width: 18px; height: 18px; }
+/* Aide */
+.help-intro { padding: 4px 6px 6px; font-size: 13px; }
+.help-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.help-item:last-child { border-bottom: 0; }
+.help-icon { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; color: var(--text); }
+.help-icon svg { width: 26px; height: 26px; }
+.help-glyph { min-width: 24px; height: 22px; padding: 0 4px; border-radius: 6px; background: var(--badge-bg, #1d3a26); color: var(--badge-fg, #7ee29a); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.help-name { font-weight: 600; font-size: 15px; }
+.help-desc { font-size: 13px; line-height: 1.4; color: var(--text2); margin-top: 2px; }
 .row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   min-height: 48px; padding: 6px 12px;

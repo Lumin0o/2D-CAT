@@ -68,6 +68,8 @@ export const DEFAULT_SETTINGS = {
   recentGroup: null,          // dernier groupe utilisé hors des cases fixes : affiché dans la dernière case
   offsetOpts: { chain: true, dim: true, construction: false },    // options de l'outil Décaler
   patternOpts: { link: true, dim: true, even: false },             // options des répétitions
+  settingsCollapsed: [],                                           // Réglages : catégories réduites
+  cornerOpts: { filletDim: true, chamferDim: true },               // congé / chanfrein : ajouter les cotes
   textOpts: { size: null, color: null },                           // outil Texte : dernière taille (mm) et couleur
   optsCollapsed: false,                                            // petite fenêtre d'options réduite
   visibility: { ...DEFAULT_VISIBILITY },  // affichage (bouton œil) : types d'éléments visibles sur le dessin

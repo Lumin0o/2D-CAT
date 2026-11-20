@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.4.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.5.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -159,6 +159,14 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 - « Changer la sélection » est au-dessus du bouton Valider.
 - Répétitions sans cote : l'occurrence tirée au doigt suit sa trajectoire (même rayon autour du centre en circulaire, le long de la direction en linéaire), même si l'original est entièrement contraint ; une occurrence entière (ligne) tirée en circulaire tourne autour du centre comme le doigt.
 - Tour complet sans cote : l'angle entre occurrences n'est plus bloqué à 360° ÷ nombre (ajouté en 0.4.3, retiré) : les occurrences restent bleues (sous-contraintes) et se tirent au doigt.
+
+## Retours iPhone intégrés (0.4.5)
+
+- Glisser un point ou une ligne au-delà de ce que les contraintes permettent (ex. bout d'une ligne dont l'angle est coté) : l'élément suit le doigt au plus près, sur sa trajectoire possible, au lieu de rester bloqué.
+- Import DXF : l'iPhone ouvre directement Fichiers (plus de Photothèque ni d'appareil photo).
+- Réglages : le panneau ne revient plus en haut quand on change un réglage ; les listes (Favoris, Unité de longueur) s'affichent enfin au-dessus du panneau (elles étaient cachées derrière) ; chaque catégorie se réduit en touchant son titre (état gardé) ; « Réinitialiser les réglages » et « Couleurs par défaut » demandent confirmation ; bouton **Aide** tout en bas : gestes, couleurs d'état, chaque outil, les relations, les cotes, les fichiers.
+- Congé / chanfrein : petite fenêtre avec « Ajouter la cote » (congé : rayon) / « Ajouter les cotes » (chanfrein : deux longueurs), retenue d'une fois sur l'autre.
+- Rectangle par le centre : le point central est un point d'esquisse (comme l'outil Point), pris au cadre et supprimé avec le rectangle ; un point devenu isolé et invisible (ancien centre dont les diagonales sont supprimées) est supprimé avec elles.
 
 ## Tester sur ordinateur
 

@@ -484,6 +484,14 @@ class CornerTool extends PickTool {
     if (corners.length) setTimeout(() => this.ask(corners), 0);
   }
   hint() { return this.first ? 'Touchez la deuxième ligne' : `Touchez un coin, ou deux lignes (${this.what})`; }
+  /** Option « Ajouter la cote » (congé : le rayon ; chanfrein : les deux longueurs), retenue d'une fois sur l'autre. */
+  get withDim() { const o = this.tc.settings.cornerOpts || {}; return o[this.optKey] !== false; }
+  options() {
+    return [{
+      label: this.dimLabel, sub: this.dimSub, value: this.withDim,
+      set: (v) => this.tc.setSetting('cornerOpts', { ...(this.tc.settings.cornerOpts || {}), [this.optKey]: v }),
+    }];
+  }
   /** Cadre : tous les coins pris dans le cadre (sauf les coins virtuels, entre deux lignes de construction). */
   get acceptsBox() { return !this.first; }
   onBox({ ids, points }) {
@@ -525,7 +533,8 @@ class CornerTool extends PickTool {
       this.constructor.last = mm;
       const gap = this.tc.pxToWorld(28);
       this.tc.applyEdit(this.label, (s) => {
-        for (const [a, b] of corners) { const r = this.apply(s, a, b, mm, { gap }); if (!r.ok) return r; }
+        const dim = this.withDim;
+        for (const [a, b] of corners) { const r = this.apply(s, a, b, mm, { gap, dim }); if (!r.ok) return r; }
         return { ok: true };
       });
       this.reset();
@@ -539,6 +548,9 @@ export class FilletTool extends CornerTool {
   get what() { return 'congé'; }
   get title() { return 'Rayon du congé'; }
   get label() { return 'Congé'; }
+  get optKey() { return 'filletDim'; }
+  get dimLabel() { return 'Ajouter la cote'; }
+  get dimSub() { return 'Cote du rayon (sinon, rayon libre)'; }
   apply(sk, a, b, r, opts) { return filletLines(sk, a, b, r, opts); }
 }
 export class ChamferTool extends CornerTool {
@@ -546,6 +558,9 @@ export class ChamferTool extends CornerTool {
   get what() { return 'chanfrein'; }
   get title() { return 'Distance du chanfrein'; }
   get label() { return 'Chanfrein'; }
+  get optKey() { return 'chamferDim'; }
+  get dimLabel() { return 'Ajouter les cotes'; }
+  get dimSub() { return 'Deux cotes de longueur par coin'; }
   apply(sk, a, b, d, opts) { return chamferLines(sk, a, b, d, opts); }
 }
 
