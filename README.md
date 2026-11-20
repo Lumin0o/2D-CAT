@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.6.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.7.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -173,6 +173,11 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 - Glisser une entité qui sert de direction (ou de centre) à une répétition sans cote, sans toucher la répétition : les occurrences ne bougent plus (le pas d'une répétition que le doigt ne touche pas est gardé ; si la direction tourne, les occurrences tournent avec, même espacement).
 - Réglages : le bouton **Aide** est juste sous « Réinitialiser les réglages ».
 - Décaler : option **Des deux côtés** (un décalage de chaque côté du contour, à la même distance ; avec « Ajouter une cote », une cote par côté).
+
+## Retours iPhone intégrés (0.4.7)
+
+- Dézoom jusqu'à ~52 m de large (iPhone en portrait), au lieu de ~19,6 m.
+- Grandes entités très zoomées : seule la partie visible de chaque ligne, cercle, arc et cote est donnée au canevas (calculée en double précision, `worldPath` dans `js/render/renderer.js`). Avant, une ligne de construction de quelques mètres vue sur 0,5 mm faisait des millions de px de pointillés : l'app tombait à 2 images/s et plantait.
 
 ## Tester sur ordinateur
 

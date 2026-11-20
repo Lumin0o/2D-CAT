@@ -11,6 +11,21 @@ const GRID_MIN_PX = 3;      // lignes les plus fines : au moins 3 px d'écart (t
 const GRID_FULL_PX = 6;     // en dessous de cet écart, les lignes fines s'estompent
 const GRID_SNAP_PX = 10;    // aimantation sur les lignes fines dès 10 px d'écart, sinon tous les 5 pas
 const GRID_STRONG_PX = 250; // espacement à partir duquel une ligne est au plus marqué
+const CLIP_MARGIN = 24;     // marge (px) autour de la vue pour le découpage des traits
+
+const mod = (a, m) => ((a % m) + m) % m;
+/** Liang–Barsky : paramètres [t0, t1] de la partie du segment A→B dans le rectangle, ou null. */
+function clipT(A, B, x0, y0, x1, y1) {
+  const dx = B[0] - A[0], dy = B[1] - A[1];
+  let t0 = 0, t1 = 1;
+  const edges = [[-dx, A[0] - x0], [dx, x1 - A[0]], [-dy, A[1] - y0], [dy, y1 - A[1]]];
+  for (const [p, q] of edges) {
+    if (p === 0) { if (q < 0) return null; continue; }
+    const r = q / p;
+    if (p < 0) { if (r > t1) return null; if (r > t0) t0 = r; } else { if (r < t0) return null; if (r < t1) t1 = r; }
+  }
+  return t1 >= t0 ? [t0, t1] : null;
+}
 
 export class Renderer {
   constructor(canvas, viewport) {
@@ -28,14 +43,92 @@ export class Renderer {
     this.canvas.style.height = h + 'px';
   }
 
-  /** Construit un chemin en coordonnées monde, puis remet la transformation écran. */
+  /**
+   * Construit un chemin décrit en coordonnées monde (moveTo, lineTo, arc, closePath), en ne gardant que la partie
+   * visible, calculée en double précision. Sans ce découpage, une grande entité très zoomée donnait au canevas des
+   * coordonnées de dizaines de millions de px : traits imprécis, et des millions de tirets à calculer pour une
+   * ligne de construction (l'app ralentissait jusqu'à planter).
+   */
   worldPath(fn) {
-    const { ctx, vp, dpr } = this;
-    const k = vp.scale * dpr;
-    ctx.setTransform(k, 0, 0, -k, vp.ox * dpr, vp.oy * dpr);
+    const { ctx, vp } = this;
+    this.screen();
     ctx.beginPath();
-    fn(ctx);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineDashOffset = 0;
+    const M = CLIP_MARGIN, X0 = -M, Y0 = -M, X1 = vp.width + M, Y1 = vp.height + M;
+    const S = (x, y) => [vp.ox + x * vp.scale, vp.oy - y * vp.scale];
+    let pen = null, start = null, last = null, run = 0, dashSet = false;
+    // run : longueur (px) déjà parcourue, pour que les pointillés ne « glissent » pas quand le début est coupé
+    const emit = (A, B, at) => {
+      if (!dashSet) {
+        dashSet = true;
+        const d = ctx.getLineDash();
+        if (d.length) { const sum = d.reduce((a, b) => a + b, 0) * (d.length % 2 ? 2 : 1); ctx.lineDashOffset = at % sum; }
+      }
+      if (!last || Math.abs(last[0] - A[0]) > 1e-6 || Math.abs(last[1] - A[1]) > 1e-6) ctx.moveTo(A[0], A[1]);
+      ctx.lineTo(B[0], B[1]);
+      last = B;
+    };
+    const seg = (A, B) => {
+      const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
+      const t = clipT(A, B, X0, Y0, X1, Y1);
+      if (t) emit([A[0] + dx * t[0], A[1] + dy * t[0]], [A[0] + dx * t[1], A[1] + dy * t[1]], run + L * t[0]);
+      run += L;
+    };
+    const arc = (cx, cy, r, a1, a2, acw) => {
+      const R = Math.abs(r) * vp.scale;
+      if (!(R > 1e-9)) return;
+      // a1 → a2 dans le sens monde (Y vers le haut) : acw est le sens du canevas, comme avec l'ancienne transformation
+      const full = Math.abs(a2 - a1) >= TAU - 1e-12;
+      const sweep = full ? TAU : !acw ? mod(a2 - a1, TAU) : -mod(a1 - a2, TAU);
+      const [sx, sy] = S(cx, cy);
+      const vx = vp.width / 2, vy = vp.height / 2, D = Math.hypot(vp.width, vp.height) / 2 + M;
+      const d = Math.hypot(sx - vx, sy - vy);
+      const len = Math.abs(sweep);
+      if (d > R + D || d < R - D) { run += R * len; return; }          // hors de la vue (ou la vue est dedans)
+      if (R < 3000) {
+        // assez petit : arc natif, en px écran (angles inversés, Y vers le bas)
+        const A = [sx + R * Math.cos(a1), sy - R * Math.sin(a1)];
+        emit(A, A, run);
+        ctx.arc(sx, sy, R, -a1, -(a1 + sweep), sweep > 0);
+        last = [sx + R * Math.cos(a1 + sweep), sy - R * Math.sin(a1 + sweep)];
+        run += R * len;
+        return;
+      }
+      // grand arc : seulement la portion qui traverse la vue, en petits segments (écart < 0,25 px)
+      const s0 = sweep > 0 ? a1 : a1 + sweep;
+      const tc = Math.atan2(sy - vy, vx - sx);
+      const del = Math.acos(Math.max(-1, Math.min(1, (R * R + d * d - D * D) / (2 * R * d))));
+      const rel = mod(tc - del - s0, TAU);
+      const h = 2 * Math.acos(Math.max(-1, 1 - 0.25 / R)) || 1e-6;
+      for (const w0 of [rel, rel - TAU]) {
+        const u0 = Math.max(0, w0), u1 = Math.min(len, w0 + 2 * del);
+        if (!(u1 > u0)) continue;
+        const n = Math.min(4000, Math.max(1, Math.ceil((u1 - u0) / h)));
+        let P = null;
+        for (let i = 0; i <= n; i++) {
+          const ph = s0 + u0 + (u1 - u0) * i / n;
+          const Q = [sx + R * Math.cos(ph), sy - R * Math.sin(ph)];
+          if (P) emit(P, Q, run + R * u0);
+          P = Q;
+        }
+      }
+      run += R * len;
+    };
+    fn({
+      moveTo(x, y) { pen = S(x, y); start = pen; },
+      lineTo(x, y) { const B = S(x, y); if (pen) seg(pen, B); else start = B; pen = B; },
+      closePath() { if (pen && start) seg(pen, start); pen = start; },
+      arc(cx, cy, r, a1, a2, acw = false) { arc(cx, cy, r, a1, a2, acw); pen = null; },
+    });
+  }
+  /** Point écran hors de la vue (marge comprise) : rien à dessiner. */
+  offscreen(s) { const M = CLIP_MARGIN, vp = this.vp; return s.x < -M || s.y < -M || s.x > vp.width + M || s.y > vp.height + M; }
+  /** Segment écran [A, B] coupé à la vue (marge comprise), ou null s'il est entièrement dehors. */
+  clipScreen(A, B) {
+    const M = CLIP_MARGIN, t = clipT([A.x, A.y], [B.x, B.y], -M, -M, this.vp.width + M, this.vp.height + M);
+    if (!t) return null;
+    const dx = B.x - A.x, dy = B.y - A.y;
+    return [{ x: A.x + dx * t[0], y: A.y + dy * t[0] }, { x: A.x + dx * t[1], y: A.y + dy * t[1] }];
   }
   screen() { this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); }
 
@@ -88,6 +181,7 @@ export class Renderer {
       ctx.strokeStyle = st.box.crossing ? C.green : C.accent;
       ctx.lineWidth = 1;
       ctx.setLineDash(st.box.crossing ? [5, 4] : []);
+      ctx.lineDashOffset = 0;
       ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
       ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
       ctx.setLineDash([]);
@@ -232,10 +326,10 @@ export class Renderer {
       const dx = B.x - A.x, dy = B.y - A.y, l = Math.hypot(dx, dy);
       if (l < 1) continue;
       const g = Math.min(5, l / 3);
-      ctx.moveTo(A.x + dx / l * g, A.y + dy / l * g);
-      ctx.lineTo(B.x + dx / l * 6, B.y + dy / l * 6);
+      const c = this.clipScreen({ x: A.x + dx / l * g, y: A.y + dy / l * g }, { x: B.x + dx / l * 6, y: B.y + dy / l * 6 });
+      if (c) { ctx.moveTo(c[0].x, c[0].y); ctx.lineTo(c[1].x, c[1].y); }
     }
-    for (const [a, b] of lay.segs) { const A = vp.toScreen(a), B = vp.toScreen(b); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); }
+    for (const [a, b] of lay.segs) { const c = this.clipScreen(vp.toScreen(a), vp.toScreen(b)); if (c) { ctx.moveTo(c[0].x, c[0].y); ctx.lineTo(c[1].x, c[1].y); } }
     ctx.stroke();
     if (lay.arc) { this.worldPath((c) => c.arc(lay.arc.c.x, lay.arc.c.y, lay.arc.r, lay.arc.a1, lay.arc.a2, !lay.arc.ccw)); ctx.stroke(); }
     // flèches
@@ -270,6 +364,7 @@ export class Renderer {
   /** Point d'esquisse (outil Point) : astérisque à six branches, de la taille d'une extrémité. */
   drawSketchPoint(s, color, r, bg) {
     const { ctx } = this;
+    if (this.offscreen(s)) return;
     ctx.save();
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -284,6 +379,7 @@ export class Renderer {
 
   drawPoint(s, color, r, bg) {
     const { ctx } = this;
+    if (this.offscreen(s)) return;
     ctx.beginPath();
     ctx.arc(s.x, s.y, r + 1.2, 0, TAU);
     ctx.fillStyle = bg;
@@ -344,6 +440,7 @@ export class Renderer {
     ctx.strokeStyle = C.axis;
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 4]);
+    ctx.lineDashOffset = 0;
     ctx.beginPath();
     ctx.moveTo(0, Math.round(o.y) + 0.5); ctx.lineTo(vp.width, Math.round(o.y) + 0.5);
     ctx.moveTo(Math.round(o.x) + 0.5, 0); ctx.lineTo(Math.round(o.x) + 0.5, vp.height);

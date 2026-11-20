@@ -6,7 +6,7 @@ export class Viewport {
     this.oy = 0;
     this.width = 0;
     this.height = 0;
-    this.minScale = 0.02;
+    this.minScale = 0.0075;   // ~52 m de large sur un iPhone en portrait
     this.maxScale = 4000;
   }
   toScreen(p) { return { x: this.ox + p.x * this.scale, y: this.oy - p.y * this.scale }; }
