@@ -1,6 +1,9 @@
 // DXF : export (lignes, cercles, arcs en vraie grandeur) et import (lignes, cercles, arcs, polylignes simples).
 // Format ASCII AutoCAD 2000 (AC1015), complet (tables, blocs, objets), ouvert par AutoCAD et les autres logiciels
 // de CAO. La géométrie interne est en mm. Export : construction sur le calque « CONSTRUCTION », textes en TEXT.
+// L'esquisse complète (relations, cotes, répétitions…) est aussi rangée dans le fichier, dans un objet XRECORD
+// « ESQUISSE2D » du dictionnaire principal (section OBJECTS) : les autres logiciels l'ignorent et lisent les traits,
+// l'app la relit à l'import si les traits n'ont pas été modifiés depuis.
 import { arcInfo, arcBBox } from './geom.js';
 import { DXF_TEMPLATE, MSP_OWNER, FIRST_HANDLE } from './dxfTemplate.js';
 
@@ -138,7 +141,84 @@ export function exportDXF(sk, { unit = 'mm', skip = null, skipText = null } = {}
     .replace('@VH@', num(Math.max(h, w * 0.6, 1e-3) * 1.2))
     .replace('@HANDSEED@', handle.toString(16).toUpperCase())
     .replace('@ENTITIES@', out.length ? out.join('\n') + '\n' : '');
-  return { text: text.replace(/\r?\n/g, '\r\n'), count };
+  return { text: embedSketch(text, sk, handle).replace(/\r?\n/g, '\r\n'), count };
+}
+
+// ---------- Esquisse complète dans le DXF ----------
+export const APP_KEY = 'ESQUISSE2D';
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+/** Base64 du texte en UTF-8 (sans dépendre de btoa / TextEncoder). */
+function toB64(str) {
+  const bin = unescape(encodeURIComponent(str));
+  let out = '';
+  for (let i = 0; i < bin.length; i += 3) {
+    const a = bin.charCodeAt(i), b = bin.charCodeAt(i + 1), c = bin.charCodeAt(i + 2);
+    const n = (a << 16) | ((b || 0) << 8) | (c || 0);
+    out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] + (i + 1 < bin.length ? B64[(n >> 6) & 63] : '=') + (i + 2 < bin.length ? B64[n & 63] : '=');
+  }
+  return out;
+}
+function fromB64(b64) {
+  const clean = b64.replace(/[^A-Za-z0-9+/]/g, '');
+  let bin = '';
+  for (let i = 0; i < clean.length; i += 4) {
+    const v = [0, 1, 2, 3].map((k) => (i + k < clean.length ? B64.indexOf(clean[i + k]) : -1));
+    const n = (v[0] << 18) | (v[1] << 12) | (Math.max(0, v[2]) << 6) | Math.max(0, v[3]);
+    bin += String.fromCharCode((n >> 16) & 255);
+    if (v[2] >= 0) bin += String.fromCharCode((n >> 8) & 255);
+    if (v[3] >= 0) bin += String.fromCharCode(n & 255);
+  }
+  return decodeURIComponent(escape(bin));
+}
+/**
+ * Empreinte des traits lus dans un DXF (au millième de mm) : si un autre logiciel a modifié le dessin, elle change,
+ * et l'esquisse rangée dans le fichier n'est plus utilisée (on ne garde que les traits).
+ */
+export function geometrySignature(items) {
+  const r = (v) => String(Math.round(v * 1000));
+  const pt = (p) => r(p.x) + ',' + r(p.y);
+  const keys = items.map((it) => {
+    if (it.type === 'line') { const [a, b] = [pt(it.a), pt(it.b)].sort(); return 'L' + (it.infinite ? 'i' : '') + a + ';' + b; }
+    if (it.type === 'circle') return 'C' + pt(it.c) + ';' + r(it.r);
+    if (it.type === 'arc') return 'A' + pt(it.c) + ';' + pt(it.s) + ';' + pt(it.e);
+    if (it.type === 'text') return 'T' + r(it.x) + ',' + r(it.y) + ';' + r(it.size) + ';' + it.text;
+    return '';
+  }).sort();
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  const all = keys.join('|');
+  for (let i = 0; i < all.length; i++) { const c = all.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619) >>> 0; h2 = Math.imul(h2 + c, 2246822519) >>> 0; }
+  return keys.length + ':' + h1.toString(16) + h2.toString(16);
+}
+/** Ajoute l'esquisse complète (XRECORD « ESQUISSE2D », référencé par le dictionnaire principal A). */
+function embedSketch(text, sk, handle) {
+  const sig = geometrySignature(parseDXF(text).items);
+  const data = toB64(JSON.stringify({ app: 'esquisse2d', v: 1, sig, sketch: sk.toJSON() }));
+  const h = handle.toString(16).toUpperCase();
+  const rec = ['  0', 'XRECORD', '  5', h, '330', 'A', '100', 'AcDbXrecord', '280', '1'];
+  for (let i = 0; i < data.length; i += 250) rec.push('  1', data.slice(i, i + 250));
+  const entry = '  3\nEZDXF_META\n350\n2D\n';
+  const end = text.lastIndexOf('  0\nENDSEC\n  0\nEOF');
+  if (!text.includes(entry) || end < 0) return text;
+  const seed = (handle + 1).toString(16).toUpperCase();
+  return text.slice(0, end).replace(entry, entry + `  3\n${APP_KEY}\n350\n${h}\n`)
+    .replace(/(\$HANDSEED\n\s*5\n)[0-9A-F]+/, `$1${seed}`)
+    + rec.join('\n') + '\n' + text.slice(end);
+}
+/** Esquisse rangée dans le DXF par l'app ({ sketch, sig }), ou null. */
+function readEmbedded(P) {
+  let h = null;
+  for (let i = 0; i < P.length - 1; i++) if (P[i][0] === 3 && P[i][1] === APP_KEY && P[i + 1][0] === 350) { h = P[i + 1][1]; break; }
+  if (!h) return null;
+  for (let i = 0; i < P.length - 1; i++) {
+    if (!(P[i][0] === 0 && P[i][1] === 'XRECORD' && P[i + 1][0] === 5 && P[i + 1][1].toUpperCase() === h.toUpperCase())) continue;
+    let b64 = '';
+    for (let j = i + 2; j < P.length && P[j][0] !== 0; j++) if (P[j][0] === 1) b64 += P[j][1];
+    try {
+      const j = JSON.parse(fromB64(b64));
+      return j && j.app === 'esquisse2d' && j.sketch ? { sketch: j.sketch, sig: j.sig } : null;
+    } catch (err) { return null; }
+  }
+  return null;
 }
 
 /** Paires (code, valeur) d'un texte DXF. */
@@ -157,7 +237,8 @@ function pairs(text) {
  * Lit un DXF : lignes, cercles, arcs, polylignes (LWPOLYLINE, POLYLINE, avec arrondis « bulge »).
  * Les entités de l'espace papier et des blocs sont ignorées.
  * defaultUnit : unité supposée si le fichier ne la précise pas.
- * @returns {{items:Array, unitMM:number, skipped:Object<string,number>, unitKnown:boolean}}
+ * @returns {{items:Array, unitMM:number, skipped:Object<string,number>, unitKnown:boolean, embedded:?{sketch, match}}}
+ *   embedded : esquisse complète rangée par l'app ; match : faux si les traits ont été modifiés depuis
  *   items : { type:'line', a, b } | { type:'circle', c, r } | { type:'arc', c, s, e, ccw }
  *           | { type:'text', x, y, text, size, color } en mm
  */
@@ -266,7 +347,10 @@ export function parseDXF(text, { defaultUnit = 'mm' } = {}) {
     const layer = (props.find((q) => q[0] === 8) || [8, '0'])[1];
     if (/constr/i.test(layer)) for (let j = n0; j < items.length; j++) items[j].construction = true;
   }
-  return { items, unitMM, unitKnown, skipped };
+  // esquisse complète rangée par l'app : utilisée seulement si les traits sont restés les mêmes
+  let embedded = readEmbedded(P);
+  if (embedded) embedded = { sketch: embedded.sketch, match: embedded.sig === geometrySignature(items) };
+  return { items, unitMM, unitKnown, skipped, embedded };
 }
 
 /**

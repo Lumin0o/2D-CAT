@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.7.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.8.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -178,6 +178,10 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 
 - Dézoom jusqu'à ~52 m de large (iPhone en portrait), au lieu de ~19,6 m.
 - Grandes entités très zoomées : seule la partie visible de chaque ligne, cercle, arc et cote est donnée au canevas (calculée en double précision, `worldPath` dans `js/render/renderer.js`). Avant, une ligne de construction de quelques mètres vue sur 0,5 mm faisait des millions de px de pointillés : l'app tombait à 2 images/s et plantait.
+
+## Retours iPhone intégrés (0.4.8)
+
+- DXF : l'export range aussi l'esquisse complète (relations, cotes, répétitions, textes, positions des cotes) dans un objet XRECORD « ESQUISSE2D » du dictionnaire principal (section OBJECTS, comme les données d'application d'AutoCAD ou d'ezdxf). Les autres logiciels l'ignorent et lisent les traits comme avant ; ezdxf relit le fichier sans erreur à l'audit. À l'import, l'app reprend l'esquisse complète (ajoutée à l'esquisse en cours, identifiants renumérotés, origine partagée) si les traits du fichier sont restés les mêmes (empreinte au millième de mm) ; sinon, seulement les traits, comme pour un DXF d'un autre logiciel.
 
 ## Tester sur ordinateur
 

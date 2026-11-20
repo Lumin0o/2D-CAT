@@ -157,17 +157,29 @@ export function importDXFFile(app) {
   });
   input.click();
 }
-/** Ajoute le contenu d'un DXF à l'esquisse en cours (annulable). */
+/**
+ * Ajoute le contenu d'un DXF à l'esquisse en cours (annulable). Un DXF exporté par l'app redonne l'esquisse
+ * complète (relations, cotes…), sauf si ses traits ont été modifiés ailleurs depuis : seulement les traits alors.
+ */
 export function importDXFText(app, text, name = 'DXF') {
   const r = parseDXF(text, { defaultUnit: app.settings.get('unit') });
   if (!r.items.length) { showToast('Aucune ligne, cercle, arc ou texte dans ce fichier', { error: true, ms: 3000 }); return 0; }
   if (app.tool) app.setTool(null);
+  if (r.embedded && r.embedded.match) {
+    const got = app.sketch.merge(r.embedded.sketch);
+    const n = got.entities.length + got.texts.length;
+    app.selection.clear();
+    app.commit('Import DXF');
+    app.fitAll();
+    showToast(`${name} : ${n} élément${n > 1 ? 's' : ''} importé${n > 1 ? 's' : ''}, avec relations et cotes`, { ms: 3500 });
+    return n;
+  }
   const ids = addImported(app.sketch, r.items);
   app.selection.clear();
   app.commit('Import DXF');
   app.fitAll();
   const ignored = Object.values(r.skipped).reduce((n, c) => n + c, 0);
-  showToast(`${name} : ${ids.length} élément${ids.length > 1 ? 's' : ''} importé${ids.length > 1 ? 's' : ''}` + (ignored ? ` · ${ignored} ignoré${ignored > 1 ? 's' : ''} (hachures, cotes, blocs…)` : '') + (r.unitKnown ? '' : ' · unité non précisée : ' + (UNITS[app.settings.get('unit')] || UNITS.mm).label), { ms: 3500 });
+  showToast(`${name} : ${ids.length} élément${ids.length > 1 ? 's' : ''} importé${ids.length > 1 ? 's' : ''}` + (r.embedded ? ' · dessin modifié dans un autre logiciel : traits seuls, sans relations ni cotes' : '') + (ignored ? ` · ${ignored} ignoré${ignored > 1 ? 's' : ''} (hachures, cotes, blocs…)` : '') + (r.unitKnown ? '' : ' · unité non précisée : ' + (UNITS[app.settings.get('unit')] || UNITS.mm).label), { ms: 3500 });
   return ids.length;
 }
 

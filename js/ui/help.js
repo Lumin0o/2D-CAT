@@ -121,7 +121,7 @@ export function buildHelp(el) {
   sec('Fichiers');
   card([
     { name: 'Enregistrer / Ouvrir', desc: 'Les esquisses sont gardées sur l\'appareil (fonctionne sans réseau), avec une miniature.' },
-    { name: 'Importer un DXF', desc: 'Ajoute les lignes, cercles, arcs et textes d\'un fichier DXF à l\'esquisse en cours.' },
-    { name: 'Exporter', desc: 'DXF (AutoCAD 2000), PDF vectoriel ou image PNG, à partager.' },
+    { name: 'Importer un DXF', desc: 'Ajoute le contenu d\'un fichier DXF à l\'esquisse en cours. Un DXF exporté par l\'app redonne l\'esquisse complète, avec ses relations et ses cotes ; s\'il a été modifié dans un autre logiciel, seuls les traits (lignes, cercles, arcs, textes) sont repris.' },
+    { name: 'Exporter', desc: 'DXF (AutoCAD 2000), PDF vectoriel ou image PNG, à partager. Le DXF s\'ouvre dans tous les logiciels de CAO et garde en plus, pour l\'app, les relations et les cotes : il sert aussi de sauvegarde ou pour passer d\'un appareil à l\'autre.' },
   ]);
 }

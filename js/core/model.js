@@ -222,6 +222,28 @@ export class Sketch {
     }
     return s;
   }
+  /**
+   * Ajoute une esquisse complète (toJSON d'une autre) à celle-ci : nouveaux identifiants, origine partagée,
+   * relations, cotes et répétitions comprises. Toute valeur qui est un identifiant de l'autre esquisse
+   * (points des entités, refs, centre, axe, cote 0…) est renumérotée.
+   * @returns {{entities:string[], texts:string[]}} identifiants créés
+   */
+  merge(j) {
+    const src = Sketch.fromJSON(j);
+    const map = new Map([[ORIGIN_ID, ORIGIN_ID]]);
+    for (const p of src.points.values()) if (p.id !== ORIGIN_ID) map.set(p.id, this.newId('p'));
+    for (const e of src.entities.values()) map.set(e.id, this.newId('e'));
+    for (const k of src.constraints.values()) map.set(k.id, this.newId('c'));
+    for (const t of src.texts.values()) map.set(t.id, this.newId('t'));
+    const m = (v) => (typeof v === 'string' ? (map.has(v) ? map.get(v) : v) : Array.isArray(v) ? v.map(m) : v);
+    const remap = (o) => { const c = {}; for (const [key, v] of Object.entries(o)) c[key] = key === 'type' ? v : m(v); return c; };
+    for (const p of src.points.values()) if (p.id !== ORIGIN_ID) this.points.set(map.get(p.id), { ...p, id: map.get(p.id) });
+    const entities = [], texts = [];
+    for (const e of src.entities.values()) { const c = remap(e); this.entities.set(c.id, c); entities.push(c.id); }
+    for (const k of src.constraints.values()) { const c = remap(k); this.constraints.set(c.id, c); }
+    for (const t of src.texts.values()) { const c = { ...t, id: map.get(t.id) }; this.texts.set(c.id, c); texts.push(c.id); }
+    return { entities, texts };
+  }
   serialize() { return JSON.stringify(this.toJSON()); }
   static deserialize(str) { return Sketch.fromJSON(str ? JSON.parse(str) : null); }
 }

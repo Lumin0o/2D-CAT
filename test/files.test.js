@@ -1,6 +1,8 @@
 // Fichiers : export / import DXF, PDF vectoriel.
 import { Sketch, ORIGIN_ID } from '../js/core/model.js';
 import { exportDXF, parseDXF, addImported } from '../js/core/dxf.js';
+import { solve, analyze } from '../js/core/solver.js';
+import { patternEntities } from '../js/core/edit.js';
 import { PdfContext, buildPDF, textWidth } from '../js/core/pdf.js';
 import { arcInfo } from '../js/core/geom.js';
 
@@ -148,6 +150,55 @@ function scene() {
   const j = Sketch.deserialize(sk.serialize());
   ok(j.texts.size === 2 && [...j.texts.values()][0].text === 'Côte été 45°', 'textes enregistrés et relus');
   ok(new Sketch().serialize().indexOf('texts') < 0, 'esquisse sans texte : format inchangé');
+}
+
+// esquisse complète dans le DXF : relations, cotes, répétition, texte accentué ; relue à l'import
+{
+  const sk = new Sketch();
+  const b = sk.addPoint(40, 0), c = sk.addPoint(40, 20), d = sk.addPoint(0, 20);
+  const L = [sk.addLine(ORIGIN_ID, b.id), sk.addLine(b.id, c.id), sk.addLine(c.id, d.id), sk.addLine(d.id, ORIGIN_ID)];
+  sk.addConstraint('horizontal', [L[0].id]); sk.addConstraint('horizontal', [L[2].id]);
+  sk.addConstraint('vertical', [L[1].id]); sk.addConstraint('vertical', [L[3].id]);
+  sk.addConstraint('dimLength', [L[0].id], { value: 40, pos: { x: 20, y: -6 } });
+  sk.addConstraint('dimLength', [L[1].id], { value: 20, pos: { x: 46, y: 10 } });
+  const ci = sk.addCircle(sk.addPoint(10, 10).id, 3);
+  sk.addConstraint('dimRadius', [ci.id], { value: 3, pos: { x: 14, y: 14 } });
+  const r = patternEntities(sk, [ci.id], { kind: 'lin', dir: { x: 1, y: 0 }, axis: L[0].id, step: 10, count: 3, link: true, dim: false });
+  ok(r.ok && solve(sk).ok, 'esquisse de départ résolue');
+  sk.addText(5, 25, 'Plaque été Ø3', { size: 3, color: '#ff3b30' });
+  const before = analyze(sk);
+  const { text } = exportDXF(sk, { unit: 'cm' });
+  ok(text.includes('ESQUISSE2D') && /\r\n  0\r\nXRECORD\r\n/.test(text), 'XRECORD ESQUISSE2D dans OBJECTS');
+  ok(text.split('\r\n').every((l) => l.length <= 255), 'aucune ligne de plus de 255 caractères');
+  const hs = text.match(/\$HANDSEED\r\n  5\r\n([0-9A-F]+)/)[1];
+  const hx = text.match(/\r\n  3\r\nESQUISSE2D\r\n350\r\n([0-9A-F]+)\r\n/)[1];
+  ok(parseInt(hs, 16) > parseInt(hx, 16), '$HANDSEED après le dernier handle (' + hx + ' < ' + hs + ')');
+  const p = parseDXF(text);
+  ok(p.items.length === 8 && p.embedded && p.embedded.match, 'relecture : traits + esquisse complète (' + p.items.length + ')');
+  const sk2 = new Sketch();
+  const got = sk2.merge(p.embedded.sketch);
+  ok(got.entities.length === sk.entities.size && got.texts.length === 1, 'entités et texte retrouvés');
+  ok(sk2.constraints.size === sk.constraints.size, 'relations et cotes retrouvées (' + sk2.constraints.size + ')');
+  ok([...sk2.texts.values()][0].text === 'Plaque été Ø3', 'texte accentué intact');
+  const an2 = analyze(sk2);
+  ok(solve(sk2).ok && an2.state === before.state && an2.over.size === 0, 'même état (' + an2.state + ')');
+  const pat = [...sk2.constraints.values()].find((k) => k.type === 'pattern');
+  ok(pat && sk2.entities.has(pat.axis) && pat.refs.every((id) => sk2.points.has(id) || sk2.entities.has(id)), 'répétition : axe et références renumérotés');
+  // dans une esquisse déjà remplie : identifiants neufs, rien d'écrasé
+  const sk3 = scene();
+  const n3 = sk3.entities.size, c3 = sk3.constraints.size;
+  sk3.merge(p.embedded.sketch);
+  ok(sk3.entities.size === n3 + sk.entities.size && sk3.constraints.size === c3 + sk.constraints.size, 'ajout à une esquisse existante');
+  ok(solve(sk3).ok, 'résolue après l\'ajout');
+  // traits modifiés par un autre logiciel : l'esquisse rangée n'est plus utilisée
+  const lines = text.split('\r\n');
+  const i = lines.indexOf('LINE');
+  const j = lines.indexOf(' 11', i);
+  lines[j + 1] = String(parseFloat(lines[j + 1]) + 0.5);
+  const q = parseDXF(lines.join('\r\n'));
+  ok(q.embedded && !q.embedded.match && q.items.length === 8, 'trait modifié ailleurs : traits seuls');
+  // fichier sans esquisse rangée (autre logiciel)
+  ok(parseDXF(lines.join('\r\n').replace('ESQUISSE2D', 'AUTRE')).embedded === null, 'DXF d\'un autre logiciel : pas d\'esquisse rangée');
 }
 
 print(fails ? `${fails} ÉCHEC(S)` : 'TOUS LES TESTS PASSENT');
