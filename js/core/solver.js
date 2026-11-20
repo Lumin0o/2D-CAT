@@ -11,8 +11,12 @@ export const isAnnotation = (k) => DIM_TYPES.has(k.type) || k.type === 'ordZero'
 
 const wrapPi = (a) => { a = (a + Math.PI) % (2 * Math.PI); if (a < 0) a += 2 * Math.PI; return a - Math.PI; };
 
-/** Construit le système : variables (coordonnées des points libres, rayons) et équations. */
-export function buildSystem(sk) {
+/**
+ * Construit le système : variables (coordonnées des points libres, rayons) et équations.
+ * opt.keep : points à ne pas recaler sur leur position de copie (occurrence tenue au doigt : c'est le pas qui suit).
+ */
+export function buildSystem(sk, opt = {}) {
+  const keep = opt.keep || null;
   const fixedPts = new Set();
   const fixedR = new Set();
   for (const p of sk.points.values()) if (p.fixed) fixedPts.add(p.id);
@@ -223,6 +227,17 @@ export function buildSystem(sk) {
         light.add(c1);
         if (lin) add(k.id, [o0, c1, ...dirPids], [], () => { const d = u(); return (X(c1) - X(o0)) * d.y - (Y(c1) - Y(o0)) * d.x; });
         else add(k.id, [o0, c1, k.center], [], () => dist(c1, k.center) - dist(o0, k.center));
+        // tour complet (espacement constant sur 360°) sans cote : l'angle entre occurrences reste 360° / n
+        const dimK = k.dim && sk.constraints.get(k.dim);
+        if (!lin && k.full && !(dimK && !dimK.driven)) {
+          const ang = () => {
+            const cx = X(k.center), cy = Y(k.center);
+            const ax = X(o0) - cx, ay = Y(o0) - cy, bx = X(c1) - cx, by = Y(c1) - cy;
+            return Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+          };
+          const want = (ang() < 0 ? -1 : 1) * 2 * Math.PI / n;
+          add(k.id, [o0, c1, k.center], [], () => wrapPi(ang() - want));
+        }
         // fins d'arcs : leur distance au centre est déjà donnée par l'arc → seulement la position angulaire
         const arcOfEnd = new Map();
         for (const e of sk.entities.values()) if (e.type === 'arc') { if (!arcOfEnd.has(e.e)) arcOfEnd.set(e.e, []); arcOfEnd.get(e.e).push(e); }
@@ -237,7 +252,7 @@ export function buildSystem(sk) {
           if (arcs.length === 1) {
             const cc = arcs[0].c;
             const iq = pIndex.get(q);
-            if (iq !== undefined) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
+            if (iq !== undefined && !(keep && keep.has(q))) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
             add(k.id, [...vars, cc], [], () => {
               const [tx, ty] = target(i, o);
               const ax = X(q) - X(cc), ay = Y(q) - Y(cc), bx = tx - X(cc), by = ty - Y(cc);
@@ -248,7 +263,7 @@ export function buildSystem(sk) {
           add(k.id, vars, [], () => X(q) - target(i, o)[0]);
           add(k.id, vars, [], () => Y(q) - target(i, o)[1]);
           const iq = pIndex.get(q);
-          if (iq !== undefined && !arcs.length) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
+          if (iq !== undefined && !arcs.length && !(keep && keep.has(q))) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
         }
         // cercles : même rayon que l'original
         for (let i = 1; i < n; i++) for (let j = 0; j < mc; j++) {
@@ -373,7 +388,7 @@ function solveLinear(A, b) {
 export function solve(sk, options = {}) {
   const tol = options.tol ?? 1e-8;
   const maxIter = options.maxIter ?? 80;
-  const sys = buildSystem(sk);
+  const sys = buildSystem(sk, { keep: options.keep });
   const { x, eqs, n } = sys;
   const m = eqs.length;
   if (m === 0) return { ok: true, residual: 0, iterations: 0 };

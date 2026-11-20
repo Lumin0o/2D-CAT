@@ -592,12 +592,14 @@ class PatternTool extends SelectThenActTool {
       { label: 'Inverser le sens', sub: lin ? 'Côté où la répétition se propage' : 'Sens de rotation', value: this.rev, set: (v) => { this.rev = v; } },
       { label: lin ? 'Espacement' : 'Angle', sub: o.even ? 'Calculé : le total réparti' : 'Entre deux occurrences', text: this.stepText(), onTap: () => this.editStep(), disabled: o.even },
     ];
-    if (o.even) rows.push({ label: lin ? 'Longueur totale' : 'Angle total', sub: lin ? 'De l\'original à la dernière occurrence' : this.totalSub(), text: this.totalText(), onTap: () => this.editTotal() });
     rows.push(
       { label: 'Nombre d\'occurrences', sub: 'Original compris', text: String(this.mem.count), onTap: () => this.editCount() },
       { label: 'Espacement constant', sub: lin ? 'Une longueur totale répartie' : 'Un angle total réparti', value: o.even, set: set('even') },
+    );
+    if (o.even) rows.push({ label: lin ? 'Longueur totale' : 'Angle total', sub: lin ? 'De l\'original à la dernière occurrence' : this.totalSub(), text: this.totalText(), onTap: () => this.editTotal() });
+    rows.push(
       { label: 'Garder les pièces identiques', sub: 'Occurrences liées à l\'original', value: o.link, set: set('link') },
-      { label: 'Ajouter une cote', sub: !o.link ? 'Avec « Garder les pièces identiques »' : this.dimSub(), value: o.link && o.dim, set: set('dim'), disabled: !o.link },
+      { label: 'Ajouter une cote', sub: this.dimSub(), value: o.dim, set: set('dim') },
     );
     return rows;
   }
@@ -610,7 +612,7 @@ class PatternTool extends SelectThenActTool {
     if (!this.ref) return;
     const items = this.items.filter((id) => !this.refIds().includes(id) || this.kind === 'circ');
     const o = this.opts;
-    const params = { ...this.params(), count: this.mem.count, link: o.link, dim: o.link && o.dim, even: o.even, full: o.even && this.isFull(), gap: this.tc.pxToWorld(28) };
+    const params = { ...this.params(), count: this.mem.count, link: o.link, dim: o.dim, even: o.even, full: o.even && this.isFull(), gap: this.tc.pxToWorld(28) };
     const r = this.tc.applyEdit(this.kind === 'lin' ? 'Répétition linéaire' : 'Répétition circulaire', (sk) => patternEntities(sk, items, params));
     if (r.ok) { this.reset(); this.tc.updateToolOptions(); }
     this.updateHint();

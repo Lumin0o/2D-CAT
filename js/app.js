@@ -899,7 +899,19 @@ export class App {
       else if (sk.texts.has(id)) d.texts.add(id);
     }
     d.ids.delete(ORIGIN_ID);
+    // une occurrence de répétition seule : tenue par le point le plus proche du doigt, le reste suit le pas
+    d.anchor = null;
+    if (d.ids.size && [...d.ids].every((pid) => this.isPatternCopy(pid))) {
+      let bd = Infinity;
+      for (const pid of d.ids) { const q = dist(sk.points.get(pid), d.startW); if (q < bd) { bd = q; d.anchor = pid; } }
+    }
   }
+  /** Relations de répétition qui utilisent le point pid. */
+  patternsOf(pid) { return [...this.sketch.constraints.values()].filter((k) => k.type === 'pattern' && k.refs.includes(pid)); }
+  /** Vrai si pid est un point d'une copie (occurrence 1 et suivantes) d'une répétition liée. */
+  isPatternCopy(pid) { return this.patternsOf(pid).some((k) => { const i = k.refs.indexOf(pid); return i >= k.m && i < k.m * k.n; }); }
+  /** Vrai si a et b appartiennent à la même répétition : les fusionner défairait la répétition. */
+  samePattern(a, b) { return this.patternsOf(a).some((k) => k.refs.includes(b)); }
   applyDrag(d, wp) {
     const sk = this.sketch;
     if (d.mode === 'dim') {
@@ -909,6 +921,7 @@ export class App {
       return;
     }
     const weights = new Map();
+    let keep = null;
     const grid = this.gridSnapOn() ? this.gridStep() : 0;
     const snapG = (v) => (grid ? { x: Math.round(v.x / grid) * grid, y: Math.round(v.y / grid) * grid } : v);
     if (d.mode === 'point') {
@@ -922,12 +935,15 @@ export class App {
         const exclude = new Set([d.single]);
         const own = new Set();
         for (const e of sk.entitiesOfPoint(d.single)) { own.add(e.id); for (const pid of sk.entityPointIds(e)) exclude.add(pid); }
+        // pas d'accroche sur un point de la même répétition : les occurrences restent identiques à l'original
+        for (const k of this.patternsOf(d.single)) for (const r of k.refs) if (sk.points.has(r)) exclude.add(r);
         const s = this.snap(wp, { excludePoints: exclude, excludeEntities: own });
         if (s.pointId) { target = { x: s.x, y: s.y }; d.mergeWith = s.pointId; }
         else if (ENTITY_SNAPS.has(s.kind)) { target = { x: s.x, y: s.y }; d.snapOn = s; }
       }
       p.x = target.x; p.y = target.y;
       weights.set(d.single, HEAVY);
+      if (this.isPatternCopy(d.single)) keep = new Set([d.single]);
     } else if (d.mode === 'radius') {
       const c = sk.points.get(d.circle.c);
       d.circle.r = Math.max(this.vp.pxToWorld(2), dist(c, wp));
@@ -935,12 +951,18 @@ export class App {
     } else {
       const delta = snapG(sub(wp, d.last));
       if (delta.x === 0 && delta.y === 0) return;
-      for (const pid of d.ids) { const p = sk.points.get(pid); if (p) { p.x += delta.x; p.y += delta.y; weights.set(pid, HEAVY); } }
+      for (const pid of d.ids) {
+        const p = sk.points.get(pid);
+        if (!p) continue;
+        p.x += delta.x; p.y += delta.y;
+        if (!d.anchor || pid === d.anchor) weights.set(pid, HEAVY);
+      }
+      if (d.anchor) keep = new Set([d.anchor]);
       for (const tid of d.texts || []) { const t = sk.texts.get(tid); if (t) { t.x += delta.x; t.y += delta.y; } }
       d.pendingLast = add(d.last, delta);
       if (!d.ids.size) { d.last = d.pendingLast; d.good = this.capturePositions(); return; }    // textes seuls
     }
-    const res = solve(sk, { weights, maxIter: 40 });
+    const res = solve(sk, { weights, maxIter: 40, keep });
     if (!res.ok) { this.restorePositions(d.good); return; }
     d.good = this.capturePositions();
     if (d.pendingLast) d.last = d.pendingLast;
@@ -948,6 +970,7 @@ export class App {
   endDrag(d) {
     const sk = this.sketch;
     if (d.mode === 'dim') { this.commit('Déplacement de cote'); return; }
+    if (d.mode === 'point' && d.mergeWith && this.samePattern(d.mergeWith, d.single)) d.mergeWith = null;
     if (d.mode === 'point' && d.mergeWith && sk.points.has(d.mergeWith) && sk.points.has(d.single)) {
       const before = sk.serialize();
       const keep = sk.mergePoints(d.mergeWith, d.single);
@@ -1053,6 +1076,7 @@ export class App {
       const [a, b] = r.merge;
       const shared = sk.entitiesOfPoint(a).some((e) => sk.entityPointIds(e).includes(b));
       if (shared) { showToast('Ces deux points appartiennent à la même entité', { error: true }); return; }
+      if (this.samePattern(a, b)) { showToast('Impossible : les occurrences d\'une répétition restent identiques à l\'original', { error: true, ms: 3000 }); return; }
       sk.mergePoints(a, b);
       sk.cleanupDegenerate();
       if (!solve(sk).ok) { this.sketch = Sketch.deserialize(before); showToast('Coïncidence impossible : trop de contraintes', { error: true }); this.refreshUI(); return; }

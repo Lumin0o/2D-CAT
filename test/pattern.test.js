@@ -190,5 +190,70 @@ function rect(sk, x0 = 0, y0 = 0) {
   ok(near(Math.atan2(last3.y, last3.x), Math.PI / 2, 1e-6) && analyze(sk).over.size === 0, 'dernière à 90°, sans sur-contrainte');
 }
 
+// linéaire liée, espacement constant, sans cote : on tient la 4ᵉ occurrence au doigt, le pas suit
+{
+  const sk = new Sketch();
+  const { L } = rect(sk);
+  sk.addConstraint('fixed', [ORIGIN_ID]);
+  const r = patternEntities(sk, L.map((l) => l.id), { kind: 'lin', dir: { x: 1, y: 0 }, step: 20, count: 5, link: true, dim: false, even: true });
+  ok(r.ok && solve(sk).ok, 'linéaire espacement constant sans cote');
+  const pat = [...sk.constraints.values()].find((k) => k.type === 'pattern');
+  for (const [i, j] of [[3, 1], [1, 2], [4, 3]]) {
+    const pid = pat.refs[i * pat.m + j];
+    const q = sk.points.get(pid);
+    const o = sk.points.get(pat.refs[j]);
+    const tx = q.x + 6 * i, ty = q.y;
+    q.x = tx; q.y = ty;
+    const res = solve(sk, { weights: new Map([[pid, 1e6]]), keep: new Set([pid]), maxIter: 40 });
+    const st = (sk.points.get(pat.refs[pat.m + j]).x - o.x);
+    ok(res.ok && near(q.x, tx, 1e-4) && near(sk.points.get(pat.refs[2 * pat.m + j]).x - o.x, 2 * st, 1e-6), `occurrence ${i} tenue au doigt : pas ${st.toFixed(3)}`);
+  }
+}
+
+// circulaire en tour complet sans cote : 360° / n est tenu ; tirer une occurrence fait tourner l'ensemble
+{
+  const sk = new Sketch();
+  const p1 = sk.addPoint(20, 0), p2 = sk.addPoint(30, 0);
+  const l1 = sk.addLine(p1.id, p2.id);
+  sk.addConstraint('dimLength', [l1.id], { value: 10 });
+  const r = patternEntities(sk, [l1.id], { kind: 'circ', center: ORIGIN_ID, step: 2 * Math.PI / 6, count: 6, link: true, dim: false, even: true, full: true });
+  ok(r.ok && solve(sk).ok, 'tour complet sans cote');
+  const pat = [...sk.constraints.values()].find((k) => k.type === 'pattern');
+  const pid = pat.refs[3 * pat.m + 0];
+  const q = sk.points.get(pid);
+  const a0 = Math.atan2(q.y, q.x);
+  const R = Math.hypot(q.x, q.y);
+  q.x = R * Math.cos(a0 + 0.2); q.y = R * Math.sin(a0 + 0.2);
+  ok(solve(sk, { weights: new Map([[pid, 1e6]]), keep: new Set([pid]), maxIter: 40 }).ok, 'occurrence 3 tournée de 0,2 rad');
+  const o = sk.points.get(pat.refs[0]), c1 = sk.points.get(pat.refs[pat.m]);
+  const step = Math.atan2(o.x * c1.y - o.y * c1.x, o.x * c1.x + o.y * c1.y);
+  ok(near(Math.abs(step), Math.PI / 3, 1e-6), 'toujours 60° entre occurrences');
+  ok(near(Math.atan2(o.y, o.x), 0.2, 1e-4), 'l\'original a tourné avec');
+}
+
+// circulaire en copies libres : les relations H / V suivent la rotation (copies non déformées), cote possible
+{
+  const sk = new Sketch();
+  const a = sk.addPoint(20, 0).id, b = sk.addPoint(30, 0).id, c = sk.addPoint(30, 5).id, d = sk.addPoint(20, 5).id;
+  const L = [sk.addLine(a, b), sk.addLine(b, c), sk.addLine(c, d), sk.addLine(d, a)];
+  sk.addConstraint('horizontal', [L[0].id]); sk.addConstraint('horizontal', [L[2].id]);
+  sk.addConstraint('vertical', [L[1].id]); sk.addConstraint('vertical', [L[3].id]);
+  const before = new Map([...sk.points.values()].map((p) => [p.id, [p.x, p.y]]));
+  const r = patternEntities(sk, L.map((l) => l.id), { kind: 'circ', center: ORIGIN_ID, step: Math.PI / 4, count: 8, link: false, dim: true });
+  ok(r.ok && r.ids.length === 28, 'copies libres : 7 rectangles');
+  const pos = new Map([...sk.points.values()].map((p) => [p.id, [p.x, p.y]]));
+  ok(solve(sk).ok, 'résolu');
+  let moved = 0;
+  for (const p of sk.points.values()) { const v = pos.get(p.id); if (Math.hypot(p.x - v[0], p.y - v[1]) > 1e-6) moved++; }
+  ok(moved === 0, 'aucune copie redressée (' + moved + ' points ont bougé)');
+  const types = [...sk.constraints.values()].map((k) => k.type);
+  ok(types.filter((t) => t === 'parallel').length === 4 && types.filter((t) => t === 'perpendicular').length === 8, 'H / V remplacées par parallèles et perpendiculaires (sauf ½ tour et ¼ de tour)');
+  ok(types.filter((t) => t === 'horizontal').length === 8 && types.filter((t) => t === 'vertical').length === 8, 'H / V gardées ou échangées à 90°, 180°, 270°');
+  const dim = [...sk.constraints.values()].find((k) => k.type === 'dimAngle');
+  ok(dim && near(dim.value, Math.PI / 4), 'cote d\'angle de 45° sur la copie libre');
+  ok(analyze(sk).over.size === 0, 'pas de sur-contrainte');
+  void before;
+}
+
 print(fails ? `${fails} ÉCHEC(S)` : 'TOUS LES TESTS PASSENT');
 if (fails) throw new Error('tests');
