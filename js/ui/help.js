@@ -31,7 +31,7 @@ const TOOL_HELP = {
   measure: 'Mètre : mesure une longueur, une distance ou un angle sans créer de cote.',
   trim: 'Ajuster intelligent : touchez la partie d\'une entité à supprimer, jusqu\'aux intersections les plus proches.',
   extend: 'Prolonger : touchez une ligne ou un arc près du bout à prolonger jusqu\'à la prochaine entité.',
-  offset: 'Décaler les entités : touchez le contour (ou l\'entité), puis le côté, et tapez la distance. Options : toute la chaîne d\'entités reliées, cote de la distance, décalage en construction.',
+  offset: 'Décaler les entités : touchez le contour (ou l\'entité), puis le côté, et tapez la distance. Options : toute la chaîne d\'entités reliées, des deux côtés, cote de la distance, décalage en construction. Avec la cote, la distance est verrouillée : la copie ne se glisse plus de côté (supprimez la cote, ou décochez l\'option avant de décaler, pour la placer à la main).',
   mirror: 'Symétrie : choisissez les éléments, puis la ligne d\'axe ; les copies sont reliées par la relation Symétrique.',
   fillet: 'Congé d\'esquisse : touchez un coin (ou deux lignes, ou un cadre) et tapez le rayon. Le coin d\'origine reste en lignes de construction ; option : ajouter la cote du rayon.',
   chamfer: 'Chanfrein d\'esquisse : touchez un coin (ou deux lignes, ou un cadre) et tapez la distance ; option : ajouter les deux cotes.',

@@ -185,7 +185,7 @@ export class OffsetTool extends PickTool {
     if (ids.length) this.setSource(ids);
   }
   /** Options (petite fenêtre sous la barre d'outils), gardées dans les réglages. */
-  get opts() { return { chain: true, dim: true, construction: false, ...(this.tc.settings.offsetOpts || {}) }; }
+  get opts() { return { chain: true, both: false, dim: true, construction: false, ...(this.tc.settings.offsetOpts || {}) }; }
   options() {
     const o = this.opts;
     const set = (key) => (v) => {
@@ -194,6 +194,7 @@ export class OffsetTool extends PickTool {
     };
     return [
       { label: 'Sélectionner la chaîne', sub: 'Entités reliées bout à bout (hors construction)', value: o.chain, set: set('chain') },
+      { label: 'Des deux côtés', sub: 'Un décalage de chaque côté, à la même distance', value: o.both, set: set('both') },
       { label: 'Ajouter une cote', sub: 'Verrouille la distance de décalage', value: o.dim, set: set('dim') },
       { label: 'Construction', sub: 'Le décalage est une ligne de construction', value: o.construction, set: set('construction') },
     ];
@@ -201,7 +202,7 @@ export class OffsetTool extends PickTool {
   /** Le cadre de sélection sert à désigner les entités tant qu'aucun contour n'est choisi. */
   get acceptsBox() { return !this.chains; }
   hint() {
-    if (this.chains) return 'Touchez le côté où décaler';
+    if (this.chains) return this.opts.both ? 'Touchez à côté du contour : décalage des deux côtés' : 'Touchez le côté où décaler';
     return this.opts.chain ? 'Touchez le contour à décaler' : 'Touchez l\'entité à décaler';
   }
   setSource(ids) {
@@ -242,9 +243,12 @@ export class OffsetTool extends PickTool {
         const chains = chainsFor(sk, src, { chain: o.chain });
         const ids = [];
         for (let i = 0; i < chains.length; i++) {
-          const r = offsetChain(sk, chains[i], mm, sides[i] ?? sides[0], { construction: o.construction, dim: o.dim, gap });
-          if (!r.ok) return r;
-          ids.push(...r.ids);
+          const side = sides[i] ?? sides[0];
+          for (const sd of o.both ? [side, -side] : [side]) {
+            const r = offsetChain(sk, chains[i], mm, sd, { construction: o.construction, dim: o.dim, gap });
+            if (!r.ok) return r;
+            ids.push(...r.ids);
+          }
         }
         return { ok: true, ids };
       });
@@ -260,18 +264,21 @@ export class OffsetTool extends PickTool {
     if (!this.chains || !this.sides || !(this.d > 0)) return;
     const g = d.ghost;
     const dash = this.opts.construction;
+    const both = this.opts.both;
     this.chains.forEach((ch, i) => {
-      const geo = offsetGeometry(this.tc.sketch, ch, this.d, this.sides[i]);
-      if (!geo) return;
-      for (const q of geo) {
-        if (q.kind === 'line') { if (q.e.infinite) g.infiniteLine(q.S, q.E, true); else g.line(q.S, q.E, dash); }
-        else if (q.kind === 'circle') g.circle(q.c, q.r, dash);
-        else {
-          const a1 = angleOf(sub(q.S, q.c)), a2 = angleOf(sub(q.E, q.c));
-          g.arc(q.c, q.r, a1, a2, q.e.ccw !== q.it.rev, dash);
-        }
-      }
+      for (const sd of both ? [this.sides[i], -this.sides[i]] : [this.sides[i]]) this.previewGeo(g, offsetGeometry(this.tc.sketch, ch, this.d, sd), dash);
     });
+  }
+  previewGeo(g, geo, dash) {
+    if (!geo) return;
+    for (const q of geo) {
+      if (q.kind === 'line') { if (q.e.infinite) g.infiniteLine(q.S, q.E, true); else g.line(q.S, q.E, dash); }
+      else if (q.kind === 'circle') g.circle(q.c, q.r, dash);
+      else {
+        const a1 = angleOf(sub(q.S, q.c)), a2 = angleOf(sub(q.E, q.c));
+        g.arc(q.c, q.r, a1, a2, q.e.ccw !== q.it.rev, dash);
+      }
+    }
   }
 }
 /** Valeur ronde proche (pour proposer une distance au clavier). */

@@ -260,5 +260,39 @@ function rect(sk, x0 = 0, y0 = 0) {
   void before;
 }
 
+// direction tirée (bout d'une ligne à angle coté, doigt hors de la ligne) : avec le pas gardé (hold),
+// les occurrences d'une répétition sans cote ne bougent pas ; sans, le pas dérivait
+{
+  const sk = new Sketch();
+  const b = sk.addPoint(50, 0).id, e = sk.addPoint(100, 8).id;
+  const l1 = sk.addLine(ORIGIN_ID, b), l2 = sk.addLine(b, e);
+  sk.addConstraint('horizontal', [l1.id]);
+  sk.addConstraint('dimLength', [l1.id], { value: 50 });
+  sk.addConstraint('dimAngle', [l1.id, l2.id], { value: Math.atan2(8, 50) });
+  const q = [[10, 10], [16, 10], [16, 18], [10, 18]].map(([x, y]) => sk.addPoint(x, y).id);
+  const L = [0, 1, 2, 3].map((i) => sk.addLine(q[i], q[(i + 1) % 4]));
+  const h = Math.hypot(50, 8);
+  const r = patternEntities(sk, L.map((l) => l.id), { kind: 'lin', dir: { x: 50 / h, y: 8 / h }, axis: l2.id, step: 9, count: 4, link: true, dim: false });
+  ok(r.ok && solve(sk).ok, 'répétition le long d\'une ligne à 9°');
+  const pat = [...sk.constraints.values()].find((k) => k.type === 'pattern');
+  const copies = pat.refs.slice(pat.m, pat.m * pat.n);
+  const before = copies.map((id) => ({ ...sk.points.get(id) }));
+  const moved = () => Math.max(...copies.map((id, i) => Math.hypot(sk.points.get(id).x - before[i].x, sk.points.get(id).y - before[i].y)));
+  const p = sk.points.get(e);
+  for (let t = 0; t < 20; t++) {
+    p.x = 90 + t; p.y = 20 - t * 0.3;
+    ok(solve(sk, { weights: new Map([[e, 0.01]]), maxIter: 40, hold: new Set([pat.id]) }).ok || t > 0, '');
+  }
+  ok(moved() < 1e-6, 'pas gardé : occurrences immobiles (' + moved().toExponential(2) + ')');
+  ok(near(Math.atan2(p.y, p.x - 50), Math.atan2(8, 50), 1e-9), 'le bout reste sur la ligne à 9°');
+  // la ligne pivote (angle coté changé) : les occurrences tournent avec, même espacement
+  const k = [...sk.constraints.values()].find((c) => c.type === 'dimAngle');
+  const o0 = sk.points.get(pat.refs[0]), c1 = sk.points.get(pat.refs[pat.m]);
+  const len = Math.hypot(c1.x - o0.x, c1.y - o0.y);
+  k.value = 20 * Math.PI / 180;
+  ok(solve(sk, { hold: new Set([pat.id]) }).ok, 'angle 20° résolu');
+  ok(near(Math.hypot(c1.x - o0.x, c1.y - o0.y), len, 1e-6) && near(Math.atan2(c1.y - o0.y, c1.x - o0.x), k.value, 1e-6), 'occurrences tournées, même espacement');
+}
+
 print(fails ? `${fails} ÉCHEC(S)` : 'TOUS LES TESTS PASSENT');
 if (fails) throw new Error('tests');

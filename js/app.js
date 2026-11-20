@@ -1020,13 +1020,23 @@ export class App {
       } else if (from) t = this.patternReach(pid, { x: from[0], y: from[1] }, { x: q.x, y: q.y });
       if (t) Object.assign(q, t);
     }
-    let res = solveHeld(sk, { weights, maxIter: 40, keep });
+    // répétitions que le doigt ne touche pas (ni l'original ni une copie) : leur pas est gardé, sinon il dériverait
+    // un peu à chaque mouvement quand leur direction (ou leur centre) est tirée
+    const touched = new Set(d.mode === 'point' ? [d.single] : d.mode === 'radius' ? [d.circle.c] : d.ids);
+    const held = new Set();
+    for (const k of sk.constraints.values()) if (k.type === 'pattern' && !k.refs.some((r) => touched.has(r))) held.add(k.id);
+    const hold = held.size ? held : null;
+    const run = (w, solver) => {
+      const r = solver(sk, { weights: w, maxIter: 40, keep, hold });
+      return r.ok || !hold ? r : solver(sk, { weights: w, maxIter: 40, keep });
+    };
+    let res = run(weights, solveHeld);
     if (!res.ok && d.mode !== 'radius') {
       // le doigt est hors de ce que les contraintes permettent (ex. bout d'une ligne dont l'angle est coté) :
       // les éléments tenus suivent au plus près, sur leur trajectoire possible, au lieu de rester bloqués
       const soft = new Map(weights);
       for (const id of soft.keys()) soft.set(id, 0.01);
-      res = solve(sk, { weights: soft, maxIter: 40, keep });
+      res = run(soft, solve);
     }
     if (!res.ok) { this.restorePositions(d.good); return; }
     d.good = this.capturePositions();

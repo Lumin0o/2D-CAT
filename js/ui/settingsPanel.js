@@ -223,12 +223,6 @@ export class SettingsPanel {
     card.appendChild(reset);
     body.appendChild(card);
 
-    card = this.section(body, 'about', 'À propos');
-    card.appendChild(row('Esquisse 2D', textValue(`Version ${APP_VERSION} · étape 4`)));
-    const off = textValue('Vérification…');
-    card.appendChild(row('Hors ligne', off));
-    offlineStatus().then((t) => { off.textContent = t; });
-
     // --- Aide ---
     body.appendChild(title(' '));
     card = document.createElement('div'); card.className = 'card';
@@ -238,6 +232,12 @@ export class SettingsPanel {
     help.addEventListener('click', (e) => { e.preventDefault(); this.settingsScroll = body.scrollTop; this.view = 'help'; this.scroll = 0; this.render(); });
     card.appendChild(help);
     body.appendChild(card);
+
+    card = this.section(body, 'about', 'À propos');
+    card.appendChild(row('Esquisse 2D', textValue(`Version ${APP_VERSION} · étape 4`)));
+    const off = textValue('Vérification…');
+    card.appendChild(row('Hors ligne', off));
+    offlineStatus().then((t) => { off.textContent = t; });
   }
 
   chooseUnit(anchor) {

@@ -17,6 +17,7 @@ const wrapPi = (a) => { a = (a + Math.PI) % (2 * Math.PI); if (a < 0) a += 2 * M
  */
 export function buildSystem(sk, opt = {}) {
   const keep = opt.keep || null;
+  const hold = opt.hold || null;      // répétitions dont le pas est gardé (non touchées par le glissement)
   const fixedPts = new Set();
   const fixedR = new Set();
   for (const p of sk.points.values()) if (p.fixed) fixedPts.add(p.id);
@@ -225,7 +226,27 @@ export function buildSystem(sk, opt = {}) {
           return [cx + vx * co - vy * si, cy + vx * si + vy * co];
         };
         light.add(c1);
-        if (lin) add(k.id, [o0, c1, ...dirPids], [], () => { const d = u(); return (X(c1) - X(o0)) * d.y - (Y(c1) - Y(o0)) * d.x; });
+        const ic1 = pIndex.get(c1);
+        // pas gardé : les copies sont entièrement recalculées (projections), leurs équations ne servent plus et
+        // tireraient un peu l'original à chaque pas
+        const held = !!(hold && hold.has(k.id) && ic1 !== undefined && !(keep && keep.has(c1)));
+        if (held) {
+          // pas gardé : si la direction (ou le centre) bouge, les occurrences suivent sans que l'espacement dérive
+          if (lin) {
+            const d0 = u(), sx = X(c1) - X(o0), sy = Y(c1) - Y(o0);
+            const s0 = (sx * d0.x + sy * d0.y < 0 ? -1 : 1) * Math.hypot(sx, sy);      // longueur du pas (la direction peut déjà être tirée)
+            projs.push(() => { const d = u(); x[ic1] = X(o0) + d.x * s0; x[ic1 + 1] = Y(o0) + d.y * s0; });
+          } else {
+            const cx0 = X(k.center), cy0 = Y(k.center);
+            const ax = X(o0) - cx0, ay = Y(o0) - cy0, bx = X(c1) - cx0, by = Y(c1) - cy0;
+            const t0 = Math.atan2(ax * by - ay * bx, ax * bx + ay * by), co = Math.cos(t0), si = Math.sin(t0);
+            projs.push(() => {
+              const cx = X(k.center), cy = Y(k.center), vx = X(o0) - cx, vy = Y(o0) - cy;
+              x[ic1] = cx + vx * co - vy * si; x[ic1 + 1] = cy + vx * si + vy * co;
+            });
+          }
+        }
+        if (held) { /* pas recalculé */ } else if (lin) add(k.id, [o0, c1, ...dirPids], [], () => { const d = u(); return (X(c1) - X(o0)) * d.y - (Y(c1) - Y(o0)) * d.x; });
         else add(k.id, [o0, c1, k.center], [], () => dist(c1, k.center) - dist(o0, k.center));
         // fins d'arcs : leur distance au centre est déjà donnée par l'arc → seulement la position angulaire
         const arcOfEnd = new Map();
@@ -241,18 +262,22 @@ export function buildSystem(sk, opt = {}) {
           if (arcs.length === 1) {
             const cc = arcs[0].c;
             const iq = pIndex.get(q);
-            if (iq !== undefined && !(keep && keep.has(q))) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
-            add(k.id, [...vars, cc], [], () => {
+            const pq = iq !== undefined && !(keep && keep.has(q));
+            if (pq) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
+            if (!(held && pq)) add(k.id, [...vars, cc], [], () => {
               const [tx, ty] = target(i, o);
               const ax = X(q) - X(cc), ay = Y(q) - Y(cc), bx = tx - X(cc), by = ty - Y(cc);
               return (ax * by - ay * bx) / (Math.hypot(bx, by) || 1);
             });
             continue;
           }
-          add(k.id, vars, [], () => X(q) - target(i, o)[0]);
-          add(k.id, vars, [], () => Y(q) - target(i, o)[1]);
           const iq = pIndex.get(q);
-          if (iq !== undefined && !arcs.length && !(keep && keep.has(q))) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
+          const pq = iq !== undefined && !(keep && keep.has(q));
+          if (!(held && pq)) {
+            add(k.id, vars, [], () => X(q) - target(i, o)[0]);
+            add(k.id, vars, [], () => Y(q) - target(i, o)[1]);
+          }
+          if (pq) projs.push(() => { const [tx, ty] = target(i, o); x[iq] = tx; x[iq + 1] = ty; });
         }
         // cercles : même rayon que l'original
         for (let i = 1; i < n; i++) for (let j = 0; j < mc; j++) {
@@ -377,11 +402,11 @@ function solveLinear(A, b) {
 export function solve(sk, options = {}) {
   const tol = options.tol ?? 1e-8;
   const maxIter = options.maxIter ?? 80;
-  const sys = buildSystem(sk, { keep: options.keep });
+  const sys = buildSystem(sk, { keep: options.keep, hold: options.hold });
   const { x, eqs, n } = sys;
   const m = eqs.length;
-  if (m === 0) return { ok: true, residual: 0, iterations: 0 };
   sys.project();
+  if (m === 0) { sys.write(); return { ok: true, residual: 0, iterations: 0 }; }
   let F = residuals(sys);
   if (n === 0) return { ok: maxAbs(F) < 1e-6, residual: maxAbs(F), iterations: 0 };
   const winv = new Float64Array(n).fill(1);

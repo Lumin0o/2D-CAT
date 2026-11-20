@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.5.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.6.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -77,7 +77,7 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 - **Cote symétrique** : une cote entre un élément et une ligne de construction, placée de l'autre côté de cette ligne, vaut deux fois la distance (comme le diamètre de SOLIDWORKS). Elle est dessinée de l'élément à son image.
 - **Valider** prend la place de la corbeille (les deux ne sont jamais visibles en même temps : l'outil reprend la sélection). En plein écran, il rejoint les autres actions sous l'indication.
 - Miroir : après le choix de l'axe, aperçu de la copie puis **Valider** ; toucher une autre ligne change l'axe.
-- Décaler : petite fenêtre d'options sous la barre d'outils (gardées dans les réglages) : **Sélectionner la chaîne** (entités reliées bout à bout, sans les lignes de construction), **Ajouter une cote** (active par défaut ; cote de la distance + relations « décalage identique » D : tout le contour suit la cote ; pour un cercle ou des arcs seuls, cote de rayon de la copie), **Construction**.
+- Décaler : petite fenêtre d'options sous la barre d'outils (gardées dans les réglages) : **Sélectionner la chaîne** (entités reliées bout à bout, sans les lignes de construction), **Ajouter une cote** (active par défaut ; cote de la distance + relations « décalage identique » D : tout le contour suit la cote ; pour un cercle ou des arcs seuls, cote de rayon de la copie), **Construction** ; depuis 0.4.6, **Des deux côtés**.
 - Barre réduite : la dernière case affiche le dernier groupe utilisé qui n'a pas déjà sa case (réglages : « Case n · Dernier groupe utilisé »).
 - Glisser un point sur une entité (ligne, cercle, arc, milieu, intersection) l'y aimante ; au lâcher, il devient coïncident (ou point milieu), comme pendant le tracé.
 
@@ -164,9 +164,15 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 
 - Glisser un point ou une ligne au-delà de ce que les contraintes permettent (ex. bout d'une ligne dont l'angle est coté) : l'élément suit le doigt au plus près, sur sa trajectoire possible, au lieu de rester bloqué.
 - Import DXF : l'iPhone ouvre directement Fichiers (plus de Photothèque ni d'appareil photo).
-- Réglages : le panneau ne revient plus en haut quand on change un réglage ; les listes (Favoris, Unité de longueur) s'affichent enfin au-dessus du panneau (elles étaient cachées derrière) ; chaque catégorie se réduit en touchant son titre (état gardé) ; « Réinitialiser les réglages » et « Couleurs par défaut » demandent confirmation ; bouton **Aide** tout en bas : gestes, couleurs d'état, chaque outil, les relations, les cotes, les fichiers.
+- Réglages : le panneau ne revient plus en haut quand on change un réglage ; les listes (Favoris, Unité de longueur) s'affichent enfin au-dessus du panneau (elles étaient cachées derrière) ; chaque catégorie se réduit en touchant son titre (état gardé) ; « Réinitialiser les réglages » et « Couleurs par défaut » demandent confirmation ; bouton **Aide** : gestes, couleurs d'état, chaque outil, les relations, les cotes, les fichiers.
 - Congé / chanfrein : petite fenêtre avec « Ajouter la cote » (congé : rayon) / « Ajouter les cotes » (chanfrein : deux longueurs), retenue d'une fois sur l'autre.
 - Rectangle par le centre : le point central est un point d'esquisse (comme l'outil Point), pris au cadre et supprimé avec le rectangle ; un point devenu isolé et invisible (ancien centre dont les diagonales sont supprimées) est supprimé avec elles.
+
+## Retours iPhone intégrés (0.4.6)
+
+- Glisser une entité qui sert de direction (ou de centre) à une répétition sans cote, sans toucher la répétition : les occurrences ne bougent plus (le pas d'une répétition que le doigt ne touche pas est gardé ; si la direction tourne, les occurrences tournent avec, même espacement).
+- Réglages : le bouton **Aide** est juste sous « Réinitialiser les réglages ».
+- Décaler : option **Des deux côtés** (un décalage de chaque côté du contour, à la même distance ; avec « Ajouter une cote », une cote par côté).
 
 ## Tester sur ordinateur
 
