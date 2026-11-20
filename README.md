@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.8.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.9.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -182,6 +182,10 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 ## Retours iPhone intégrés (0.4.8)
 
 - DXF : l'export range aussi l'esquisse complète (relations, cotes, répétitions, textes, positions des cotes) dans un objet XRECORD « ESQUISSE2D » du dictionnaire principal (section OBJECTS, comme les données d'application d'AutoCAD ou d'ezdxf). Les autres logiciels l'ignorent et lisent les traits comme avant ; ezdxf relit le fichier sans erreur à l'audit. À l'import, l'app reprend l'esquisse complète (ajoutée à l'esquisse en cours, identifiants renumérotés, origine partagée) si les traits du fichier sont restés les mêmes (empreinte au millième de mm) ; sinon, seulement les traits, comme pour un DXF d'un autre logiciel.
+
+## Retours iPhone intégrés (0.4.9)
+
+- Glisser : le mouvement du doigt est appliqué par petits pas (3 px au plus). Au démarrage d'un glissement (seuil de quelques px) ou lors d'un geste rapide, tout le chemin était appliqué d'un coup : un élément pouvait passer par-dessus un autre et une cote retombait de l'autre côté (ex. la copie d'un décalage coté qui sautait de l'autre côté de l'original).
 
 ## Tester sur ordinateur
 

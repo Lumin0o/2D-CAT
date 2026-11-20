@@ -953,7 +953,22 @@ export class App {
   }
   /** Vrai si a et b appartiennent à la même répétition : les fusionner défairait la répétition. */
   samePattern(a, b) { return this.patternsOf(a).some((k) => k.refs.includes(b)); }
+  /**
+   * Glissement jusqu'à wp, par petits pas (3 px au plus) : un grand saut du doigt (démarrage du glissement, geste
+   * rapide) ferait sinon passer un élément par-dessus un autre, et une cote ou une relation retomberait de
+   * l'autre côté (ex. un décalage coté qui se retrouve de l'autre côté de l'original).
+   */
   applyDrag(d, wp) {
+    if (d.mode === 'point' || d.mode === 'translate') {
+      const from = d.fingerW || d.startW;
+      const px = Math.hypot(wp.x - from.x, wp.y - from.y) * this.vp.scale;
+      const n = Math.min(16, Math.ceil(px / 3));
+      for (let i = 1; i < n; i++) this.applyDragStep(d, { x: from.x + (wp.x - from.x) * i / n, y: from.y + (wp.y - from.y) * i / n });
+      d.fingerW = { x: wp.x, y: wp.y };
+    }
+    this.applyDragStep(d, wp);
+  }
+  applyDragStep(d, wp) {
     const sk = this.sketch;
     if (d.mode === 'dim') {
       let k = sk.constraints.get(d.hit.id);
