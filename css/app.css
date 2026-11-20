@@ -444,6 +444,9 @@ button.row { width: 100%; text-align: left; }
   pointer-events: none;
 }
 .toolacts .rel-chip { pointer-events: auto; }
+/* « Changer la sélection » : au-dessus de Valider */
+.okacts { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.okacts .rel-chip { box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 .rel-chip.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .rel-chip.on .glyph { background: var(--accent); }
 .rel-chip.off .glyph { background: var(--surface2); color: var(--text2); }
@@ -464,9 +467,12 @@ button.row { width: 100%; text-align: left; }
   position: absolute; top: 8px; left: 8px; z-index: 5;
   width: 290px; max-width: calc(100% - 104px);
   max-height: calc(100% - 70px); overflow-y: auto;
+  -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
   box-shadow: 0 4px 14px rgba(0,0,0,.18);
 }
+/* d'autres cases plus bas (3 cases visibles au plus) : fondu en bas */
+.toolopts.more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), rgba(0,0,0,.25)); mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), rgba(0,0,0,.25)); }
 /* bouton qui réduit / rouvre la fenêtre d'options, juste à sa droite */
 .toolopts-toggle { position: absolute; top: 8px; left: calc(14px + min(290px, 100% - 104px)); z-index: 6; }
 .app.fullscreen .toolopts-toggle { opacity: .55; box-shadow: none; }

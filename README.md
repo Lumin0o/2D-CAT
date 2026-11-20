@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.3.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.4.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -149,9 +149,16 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 - Répétitions :
   - **Longueur totale / Angle total** s'affiche maintenant juste sous « Espacement constant ».
   - **Garder les pièces identiques** : un point d'une occurrence ne s'accroche plus à un point de la même répétition (cette fusion supprimait la relation et libérait les copies) ; la relation Coïncidente entre deux points de la même répétition est refusée.
-  - **Occurrence tirée au doigt** : n'importe quelle occurrence (point ou ligne) se tire au doigt, et toutes les autres suivent (le pas change) ; l'original reste en place. En tour complet (espacement constant sur 360°) sans cote, l'angle entre occurrences reste 360° ÷ nombre : tirer une occurrence fait tourner l'ensemble.
+  - **Occurrence tirée au doigt** : n'importe quelle occurrence (point ou ligne) se tire au doigt, et toutes les autres suivent (le pas change) ; l'original reste en place.
   - **Ajouter une cote** n'est plus grisée sans « Garder les pièces identiques » : la cote relie l'original à la 1ʳᵉ copie (ou à la dernière en espacement constant) ; seule cette copie est tenue, les autres sont libres.
   - **Répétition circulaire en copies libres** : les relations horizontale / verticale des copies tournées sont remplacées par des relations parallèle / perpendiculaire entre leurs lignes (gardées telles quelles, ou échangées, à 90°, 180°, 270°) : les copies ne sont plus redressées ni déformées à la validation.
+
+## Retours iPhone intégrés (0.4.4)
+
+- Fenêtre d'options sous la barre d'outils : 3 cases au plus, le reste défile (fondu en bas tant qu'il y a des cases plus bas ; le défilement est gardé quand on change un réglage).
+- « Changer la sélection » est au-dessus du bouton Valider.
+- Répétitions sans cote : l'occurrence tirée au doigt suit sa trajectoire (même rayon autour du centre en circulaire, le long de la direction en linéaire), même si l'original est entièrement contraint ; une occurrence entière (ligne) tirée en circulaire tourne autour du centre comme le doigt.
+- Tour complet sans cote : l'angle entre occurrences n'est plus bloqué à 360° ÷ nombre (ajouté en 0.4.3, retiré) : les occurrences restent bleues (sous-contraintes) et se tirent au doigt.
 
 ## Tester sur ordinateur
 

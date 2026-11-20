@@ -227,17 +227,6 @@ export function buildSystem(sk, opt = {}) {
         light.add(c1);
         if (lin) add(k.id, [o0, c1, ...dirPids], [], () => { const d = u(); return (X(c1) - X(o0)) * d.y - (Y(c1) - Y(o0)) * d.x; });
         else add(k.id, [o0, c1, k.center], [], () => dist(c1, k.center) - dist(o0, k.center));
-        // tour complet (espacement constant sur 360°) sans cote : l'angle entre occurrences reste 360° / n
-        const dimK = k.dim && sk.constraints.get(k.dim);
-        if (!lin && k.full && !(dimK && !dimK.driven)) {
-          const ang = () => {
-            const cx = X(k.center), cy = Y(k.center);
-            const ax = X(o0) - cx, ay = Y(o0) - cy, bx = X(c1) - cx, by = Y(c1) - cy;
-            return Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
-          };
-          const want = (ang() < 0 ? -1 : 1) * 2 * Math.PI / n;
-          add(k.id, [o0, c1, k.center], [], () => wrapPi(ang() - want));
-        }
         // fins d'arcs : leur distance au centre est déjà donnée par l'arc → seulement la position angulaire
         const arcOfEnd = new Map();
         for (const e of sk.entities.values()) if (e.type === 'arc') { if (!arcOfEnd.has(e.e)) arcOfEnd.set(e.e, []); arcOfEnd.get(e.e).push(e); }
@@ -458,6 +447,34 @@ export function solve(sk, options = {}) {
   const ok = residual < Math.max(tol, 1e-6) && Array.prototype.every.call(x, Number.isFinite);
   if (ok) sys.write();
   return { ok, residual, iterations: it };
+}
+
+/**
+ * Résolution avec une occurrence de répétition tenue au doigt (options.keep, un point, placé sur sa cible).
+ * Tenue ferme d'abord ; si l'original est bloqué et le pas grand, tenue souple puis affinage vers la cible.
+ */
+export function solveHeld(sk, options) {
+  const pid = options.keep && options.keep.size ? [...options.keep][0] : null;
+  const p = pid && sk.points.get(pid);
+  if (!p) return solve(sk, options);
+  // poids ferme mais pas « lourd » : un poids trop fort rend le système mal conditionné face aux copies légères
+  const firm = { ...options, weights: new Map(options.weights || []) };
+  firm.weights.set(pid, 1e3);
+  const want = { x: p.x, y: p.y };
+  let res = solve(sk, firm);
+  if (!res.ok) {
+    const soft = { ...options, weights: new Map(firm.weights) };
+    soft.weights.set(pid, 0.01);
+    res = solve(sk, soft);
+    if (!res.ok) return res;
+  }
+  // affinage : de petits pas ramènent l'occurrence exactement sous le doigt
+  for (let t = 0; t < 4 && Math.hypot(p.x - want.x, p.y - want.y) > 1e-7; t++) {
+    const got = { x: p.x, y: p.y };
+    p.x = want.x; p.y = want.y;
+    if (!solve(sk, firm).ok) { p.x = got.x; p.y = got.y; break; }     // échec : rien d'autre n'a bougé
+  }
+  return res;
 }
 
 /**

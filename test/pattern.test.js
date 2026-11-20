@@ -1,6 +1,6 @@
 // Répétitions linéaire et circulaire.
 import { Sketch, ORIGIN_ID } from '../js/core/model.js';
-import { solve, analyze } from '../js/core/solver.js';
+import { solve, analyze, solveHeld } from '../js/core/solver.js';
 import { patternEntities, setPatternCount } from '../js/core/edit.js';
 
 let fails = 0;
@@ -210,25 +210,30 @@ function rect(sk, x0 = 0, y0 = 0) {
   }
 }
 
-// circulaire en tour complet sans cote : 360° / n est tenu ; tirer une occurrence fait tourner l'ensemble
+// circulaire en tour complet sans cote : l'angle reste libre (occurrences sous-contraintes) ; tirer une occurrence
+// change l'angle entre occurrences, l'original reste en place
 {
   const sk = new Sketch();
   const p1 = sk.addPoint(20, 0), p2 = sk.addPoint(30, 0);
   const l1 = sk.addLine(p1.id, p2.id);
-  sk.addConstraint('dimLength', [l1.id], { value: 10 });
+  sk.addConstraint('fixed', [l1.id]);
   const r = patternEntities(sk, [l1.id], { kind: 'circ', center: ORIGIN_ID, step: 2 * Math.PI / 6, count: 6, link: true, dim: false, even: true, full: true });
   ok(r.ok && solve(sk).ok, 'tour complet sans cote');
   const pat = [...sk.constraints.values()].find((k) => k.type === 'pattern');
+  const an = analyze(sk);
+  ok(an.state === 'under' && an.entities.get(r.ids[0]) === 'under', 'occurrences sous-contraintes (bleues) : ' + an.state);
   const pid = pat.refs[3 * pat.m + 0];
   const q = sk.points.get(pid);
   const a0 = Math.atan2(q.y, q.x);
   const R = Math.hypot(q.x, q.y);
-  q.x = R * Math.cos(a0 + 0.2); q.y = R * Math.sin(a0 + 0.2);
-  ok(solve(sk, { weights: new Map([[pid, 1e6]]), keep: new Set([pid]), maxIter: 40 }).ok, 'occurrence 3 tournée de 0,2 rad');
+  q.x = R * Math.cos(a0 + 0.3); q.y = R * Math.sin(a0 + 0.3);
+  // comme au doigt : tenue ferme, sinon (original bloqué, grand pas) tenue souple
+  const res = solveHeld(sk, { weights: new Map([[pid, 1e6]]), keep: new Set([pid]), maxIter: 40 });
+  ok(res.ok, 'occurrence 3 tournée de 0,3 rad');
   const o = sk.points.get(pat.refs[0]), c1 = sk.points.get(pat.refs[pat.m]);
   const step = Math.atan2(o.x * c1.y - o.y * c1.x, o.x * c1.x + o.y * c1.y);
-  ok(near(Math.abs(step), Math.PI / 3, 1e-6), 'toujours 60° entre occurrences');
-  ok(near(Math.atan2(o.y, o.x), 0.2, 1e-4), 'l\'original a tourné avec');
+  ok(near(step, Math.PI / 3 + 0.1, 1e-6), 'angle entre occurrences : 60° + 0,1 rad (' + step + ')');
+  ok(near(o.x, 20) && near(o.y, 0), 'l\'original reste en place');
 }
 
 // circulaire en copies libres : les relations H / V suivent la rotation (copies non déformées), cote possible

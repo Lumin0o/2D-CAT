@@ -1,7 +1,7 @@
 // Contrôleur principal : relie modèle, solveur, rendu et interface.
 import { Sketch, ORIGIN_ID, textBox } from './core/model.js';
 import { setPatternCount } from './core/edit.js';
-import { solve, analyze, isDimension, isAnnotation } from './core/solver.js';
+import { solve, analyze, isDimension, isAnnotation, solveHeld } from './core/solver.js';
 import { History } from './core/history.js';
 import { hitTest, entityDistance, entityInsideRect, entityTouchesRect, outwardTangentAt, endpointEntities, keyPoints, closestOnEntity, entityIntersections, entityLength } from './core/query.js';
 import { dist, sub, add, mul, norm, perp, dot } from './core/geom.js';
@@ -48,7 +48,7 @@ export class App {
     this.els = {
       app: $('app'), canvasWrap: $('canvas-wrap'), canvas: $('canvas'), hint: $('hint'),
       undo: $('btn-undo'), redo: $('btn-redo'), fit: $('btn-fit'), multi: $('btn-multi'), box: $('btn-box'),
-      full: $('btn-full'), vis: $('btn-vis'), toolacts: $('toolacts'), toolopts: $('toolopts'), ok: $('btn-ok'), del: $('btn-delete'),
+      full: $('btn-full'), vis: $('btn-vis'), toolacts: $('toolacts'), okacts: $('okacts'), toolopts: $('toolopts'), ok: $('btn-ok'), del: $('btn-delete'),
       snap: $('btn-snap'), grid: $('btn-grid'), files: $('btn-files'), settings: $('btn-settings'),
       popoverLayer: $('popover-layer'), settingsPanel: $('settings-panel'),
     };
@@ -124,6 +124,7 @@ export class App {
     tog.hidden = true;
     this.els.canvasWrap.appendChild(tog);
     this.els.optsToggle = tog;
+    this.els.toolopts.addEventListener('scroll', () => this.updateOptsFade(), { passive: true });
     tog.addEventListener('click', (e) => { e.preventDefault(); this.settings.set('optsCollapsed', !this.settings.get('optsCollapsed'), true); this.updateToolOptions(); this.updateToolActions(); });
     this.updateVisButton();
     this.els.snap.querySelector('.bb-icon').innerHTML = icon('magnet');
@@ -628,7 +629,9 @@ export class App {
     const el = this.els.toolacts;
     const acts = this.tool && this.tool.actions ? this.tool.actions() : [];
     const primary = this.fullscreen ? null : acts.find((a) => a.cls === 'primary');
-    const chips = acts.filter((a) => a !== primary);
+    // « Changer la sélection » (stack) : au-dessus de Valider ; les autres actions sous l'indication
+    const stacked = acts.filter((a) => a !== primary && a.stack);
+    const chips = acts.filter((a) => a !== primary && !a.stack);
     const ok = this.els.ok;
     ok.hidden = !primary;
     this._okRun = primary ? primary.run : null;
@@ -639,15 +642,18 @@ export class App {
     }
     el.innerHTML = '';
     el.hidden = !chips.length;
+    const side = this.els.okacts;
+    side.innerHTML = '';
+    side.hidden = !stacked.length;
     // juste sous l'indication, quelle que soit sa hauteur (une ou deux lignes)
     const hint = this.els.hint;
     if (chips.length && !hint.hidden && hint.offsetHeight) el.style.top = `${hint.offsetTop + hint.offsetHeight + 6}px`;
-    for (const a of chips) {
+    for (const a of [...chips, ...stacked]) {
       const b = document.createElement('button');
       b.className = 'rel-chip ' + (a.cls || '');
       b.innerHTML = (a.glyph ? `<span class="glyph">${a.glyph}</span>` : '') + a.label;
       b.addEventListener('click', (e) => { e.preventDefault(); a.run(); this.refreshUI(); });
-      el.appendChild(b);
+      (a.stack ? side : el).appendChild(b);
     }
   }
   /**
@@ -659,7 +665,9 @@ export class App {
     const opts = this.tool ? (this.tool.options ? this.tool.options() : []) : this.selectionOptions();
     const collapsed = !!this.settings.get('optsCollapsed');
     const tog = this.els.optsToggle;
+    const scroll = el.scrollTop;      // la fenêtre est reconstruite à chaque réglage : on garde le défilement
     el.innerHTML = '';
+    el.style.maxHeight = '';
     el.hidden = !opts.length || collapsed;
     if (tog) {
       tog.hidden = !opts.length;
@@ -685,10 +693,20 @@ export class App {
       });
       el.appendChild(r);
     }
+    // 3 cases au plus : le reste défile
+    const rows = el.children;
+    if (!el.hidden && rows.length > 3) el.style.maxHeight = `min(${rows[3].offsetTop + 2}px, calc(100% - 70px))`;
+    el.scrollTop = scroll;
+    this.updateOptsFade();
     // l'indication et les actions passent sous la fenêtre (ou sous son bouton, fenêtre réduite)
     const h = opts.length ? (collapsed ? 36 : el.offsetHeight) : 0;
     this.els.hint.style.top = h ? `${h + 16}px` : '';
     this.els.toolacts.style.top = h ? `${h + 54}px` : '';
+  }
+  /** Fondu en bas de la fenêtre d'options tant qu'il reste des cases plus bas. */
+  updateOptsFade() {
+    const el = this.els.toolopts;
+    el.classList.toggle('more', el.scrollHeight - el.clientHeight - el.scrollTop > 2);
   }
   /** Ligne « Couleur » : pastilles (A = automatique) et couleur au choix. */
   colorRow(o, refresh) {
@@ -908,8 +926,31 @@ export class App {
   }
   /** Relations de répétition qui utilisent le point pid. */
   patternsOf(pid) { return [...this.sketch.constraints.values()].filter((k) => k.type === 'pattern' && k.refs.includes(pid)); }
-  /** Vrai si pid est un point d'une copie (occurrence 1 et suivantes) d'une répétition liée. */
-  isPatternCopy(pid) { return this.patternsOf(pid).some((k) => { const i = k.refs.indexOf(pid); return i >= k.m && i < k.m * k.n; }); }
+  /** Répétition liée dont pid est un point d'une copie (occurrence 1 et suivantes), ou undefined. */
+  patternOfCopy(pid) { return this.patternsOf(pid).find((k) => { const i = k.refs.indexOf(pid); return i >= k.m && i < k.m * k.n; }); }
+  isPatternCopy(pid) { return !!this.patternOfCopy(pid); }
+  /**
+   * Position la plus proche de want que le point pid d'une copie de répétition (parti de p) atteint en ne changeant
+   * que l'espacement : même distance au centre (circulaire), ou déplacement le long de la direction (linéaire).
+   */
+  patternReach(pid, p, want) {
+    const sk = this.sketch;
+    const k = this.patternOfCopy(pid);
+    if (!k) return null;
+    if (k.kind === 'lin') {
+      let u = k.dir;
+      const ax = k.axis && sk.entities.get(k.axis);
+      if (ax && ax.type === 'line') u = norm(sub(sk.points.get(ax.p2), sk.points.get(ax.p1)));
+      if (!u) return null;
+      const t = dot(sub(want, p), u);
+      return { x: p.x + u.x * t, y: p.y + u.y * t };
+    }
+    const c = sk.points.get(k.center);
+    if (!c) return null;
+    const r = dist(p, c), v = sub(want, c), l = Math.hypot(v.x, v.y);
+    if (l < 1e-12) return null;
+    return { x: c.x + v.x * r / l, y: c.y + v.y * r / l };
+  }
   /** Vrai si a et b appartiennent à la même répétition : les fusionner défairait la répétition. */
   samePattern(a, b) { return this.patternsOf(a).some((k) => k.refs.includes(b)); }
   applyDrag(d, wp) {
@@ -962,7 +1003,24 @@ export class App {
       d.pendingLast = add(d.last, delta);
       if (!d.ids.size) { d.last = d.pendingLast; d.good = this.capturePositions(); return; }    // textes seuls
     }
-    const res = solve(sk, { weights, maxIter: 40, keep });
+    if (keep) {
+      // occurrence tenue au doigt : elle suit le doigt sur sa trajectoire (même rayon autour du centre en
+      // circulaire, le long de la direction en linéaire) ; seul l'espacement change, l'original reste en place
+      const pid = [...keep][0];
+      const q = sk.points.get(pid), from = d.good.pts.get(pid);
+      const k = this.patternOfCopy(pid);
+      const c = k && k.kind !== 'lin' && sk.points.get(k.center);
+      let t = null;
+      if (from && c && d.mode === 'translate') {
+        // occurrence entière tirée en circulaire : elle tourne autour du centre comme le doigt
+        const ang = (v) => Math.atan2(v.y - c.y, v.x - c.x);
+        const da = ang(d.pendingLast) - ang(d.last), co = Math.cos(da), si = Math.sin(da);
+        const vx = from[0] - c.x, vy = from[1] - c.y;
+        t = { x: c.x + vx * co - vy * si, y: c.y + vx * si + vy * co };
+      } else if (from) t = this.patternReach(pid, { x: from[0], y: from[1] }, { x: q.x, y: q.y });
+      if (t) Object.assign(q, t);
+    }
+    const res = solveHeld(sk, { weights, maxIter: 40, keep });
     if (!res.ok) { this.restorePositions(d.good); return; }
     d.good = this.capturePositions();
     if (d.pendingLast) d.last = d.pendingLast;

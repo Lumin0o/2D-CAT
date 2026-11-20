@@ -300,7 +300,7 @@ class SelectThenActTool extends PickTool {
   get firstPhase() { return 'base'; }
   pickHint() { return 'Touchez les éléments, puis Valider'; }
   actions() {
-    if (this.phase !== 'pick') return [{ label: 'Changer la sélection', glyph: '↺', run: () => { this.phase = 'pick'; this.updateHint(); } }];
+    if (this.phase !== 'pick') return [{ label: 'Changer la sélection', glyph: '↺', stack: true, run: () => { this.phase = 'pick'; this.updateHint(); } }];
     if (!this.items.length) return [];
     return [{ label: `Valider (${this.items.length})`, count: this.items.length, glyph: '✓', cls: 'primary', run: () => { this.phase = this.firstPhase; this.onPicked(); this.updateHint(); } }];
   }
@@ -328,7 +328,7 @@ export class MirrorTool extends SelectThenActTool {
   onPicked() { this.axis = null; }
   actions() {
     if (this.phase !== 'axis') return super.actions();
-    const acts = [{ label: 'Changer la sélection', glyph: '↺', run: () => { this.phase = 'pick'; this.axis = null; this.updateHint(); } }];
+    const acts = [{ label: 'Changer la sélection', glyph: '↺', stack: true, run: () => { this.phase = 'pick'; this.axis = null; this.updateHint(); } }];
     if (this.axis) acts.push({ label: 'Valider la symétrie', glyph: '✓', cls: 'primary', run: () => this.apply() });
     return acts;
   }
@@ -566,7 +566,7 @@ class PatternTool extends SelectThenActTool {
   onPicked() { this.ref = null; this.tc.updateToolOptions(); }
   actions() {
     if (this.phase !== 'axis') return super.actions();
-    const acts = [{ label: 'Changer la sélection', glyph: '↺', run: () => { this.phase = 'pick'; this.ref = null; this.tc.updateToolOptions(); this.updateHint(); } }];
+    const acts = [{ label: 'Changer la sélection', glyph: '↺', stack: true, run: () => { this.phase = 'pick'; this.ref = null; this.tc.updateToolOptions(); this.updateHint(); } }];
     if (this.ref) acts.push({ label: 'Valider la répétition', glyph: '✓', cls: 'primary', run: () => this.apply() });
     return acts;
   }
