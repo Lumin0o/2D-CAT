@@ -1,6 +1,6 @@
 # Esquisse 2D — PWA d'esquisse façon SOLIDWORKS
 
-Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.9.
+Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires, fichiers et réglages). Version 0.4.10.
 
 ## Retours iPhone intégrés (0.2.1 – 0.2.2)
 
@@ -186,6 +186,10 @@ Les 4 étapes sont livrées (base, contraintes et cotes, outils complémentaires
 ## Retours iPhone intégrés (0.4.9)
 
 - Glisser : le mouvement du doigt est appliqué par petits pas (3 px au plus). Au démarrage d'un glissement (seuil de quelques px) ou lors d'un geste rapide, tout le chemin était appliqué d'un coup : un élément pouvait passer par-dessus un autre et une cote retombait de l'autre côté (ex. la copie d'un décalage coté qui sautait de l'autre côté de l'original).
+
+## Retours iPhone intégrés (0.4.10)
+
+- Glisser en biais un élément qui ne peut aller que dans une direction (ex. une ligne accrochée en haut et en bas à deux lignes horizontales, avec son décalage coté) : il suit maintenant la part possible du mouvement. Avant, le repli « au plus près » rendait l'élément tenu si léger que le solveur préférait le ramener à sa place plutôt que de déplacer ce qui lui est lié (ici la copie) : rien ne bougeait dès que le doigt n'allait pas pile à l'horizontale. Le repli tire maintenant l'élément vers le doigt avec un poids modéré (calcul stable), puis le ramène vers sa cible jusqu'à 4 fois. Alléger tout le reste ne marchait pas : une ligne de construction très courte rendait le calcul instable.
 
 ## Tester sur ordinateur
 

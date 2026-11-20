@@ -1047,6 +1047,24 @@ export class App {
     };
     let res = run(weights, solveHeld);
     if (!res.ok && d.mode !== 'radius') {
+      // le doigt demande un mouvement impossible (ex. ligne tirée en biais alors qu'elle ne peut aller qu'à
+      // l'horizontale) : l'élément tenu est tiré vers le doigt (poids modéré, calcul stable), puis retiré vers sa
+      // cible quelques fois ; chaque passe comble l'essentiel de l'écart et le reste du dessin s'adapte. Sans cela,
+      // le plus simple pour le solveur était de ramener l'élément tenu à sa place : rien ne bougeait.
+      const target = new Map();
+      for (const id of weights.keys()) { const p = sk.points.get(id); if (p) target.set(id, { x: p.x, y: p.y }); }
+      const pull = new Map([...target.keys()].map((id) => [id, 10]));
+      res = run(pull, solve);
+      if (res.ok) for (let t = 0; t < 4; t++) {
+        const back = this.capturePositions();
+        for (const [id, q] of target) { const p = sk.points.get(id); p.x = q.x; p.y = q.y; }
+        if (!run(pull, solve).ok) { this.restorePositions(back); break; }
+        let moved = 0;
+        for (const [id, [x, y]] of back.pts) { const p = sk.points.get(id); if (p) moved = Math.max(moved, Math.abs(p.x - x) + Math.abs(p.y - y)); }
+        if (moved < 1e-9) break;
+      }
+    }
+    if (!res.ok && d.mode !== 'radius') {
       // le doigt est hors de ce que les contraintes permettent (ex. bout d'une ligne dont l'angle est coté) :
       // les éléments tenus suivent au plus près, sur leur trajectoire possible, au lieu de rester bloqués
       const soft = new Map(weights);
